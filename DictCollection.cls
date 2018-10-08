@@ -8,7 +8,7 @@ Attribute VB_Creatable = False
 Attribute VB_PredeclaredId = True
 Attribute VB_Exposed = True
 ' ======================== START: DOCUMENTATION =====================================================================================================
-' DictCollection 036 (VBA Version) - A mix between Dictionary and Collection that can emulate both
+' DictCollection 037 (VBA Version) - A mix between Dictionary and Collection that can emulate both
 ' Karsten Held 2016-2018, karstenheld3@gmail.com, MIT License
 '
 ' ----------- HOW TO USE ----------------------------------------------------------------------------------------------------------------------------
@@ -54,7 +54,7 @@ Attribute VB_Exposed = True
 ' Get an item by key (fast)                         a = dc.ItemOf("key1")
 ' Set an item by key (fast)                         dc.ItemOf("key1") = a
 ' Add (insert) a DictCollection                     dc.AddDC("key1",0) -> at index = 0 or dc.AddDC("key1") -> after last item
-' Get nested DictCollections                        dc.AsDC("subkey1").AsDC("subsubkey1") -> will return nested DictCollection or [NONEXISTING]
+' Get nested DictCollections                        dc.AsDC("subkey1").AsDC("subsubkey1") -> will return nested DictCollection or "[NONEXISTING]"
 ' Get or Add nested DictCollections                 dc.SubDC("subkey1").SubDC("subsubkey1") -> will create nonexisting subkeys as DictCollections
 '
 ' ----------- GLOBAL SETTINGS ------------------------------------------------------------------------------------------------------------------------
@@ -68,7 +68,7 @@ Attribute VB_Exposed = True
 ' dc.EmulateDictionary = True                       DictCollection will behave like Scripting.Dictionary (no indexes, just keys)
 ' dc.EmulateCollection = True                       DictCollection will behave like VB Collection (Collection.Add implemented as DictCollection.Add2)
 ' dc.ZeroBasedIndex = True (default)                first item can be accessed with index = 0 (when ZeroBasedIndex=False, first index = 1)
-' dc.DefaultValueEnabled = True (default)           calling default property without argument returns either the first item, [EMPTY], or [NONEXISTING]
+' dc.DefaultValueEnabled = True (default)           calling default property without argument returns either the first item, "[EMPTY]", or "[NONEXISTING]"
 '   -> see test [DVS-1]                             allows endless subcollection chaining: 'set dc2 = dc1("a")("nonexisting")("b")' (ThrowErrors=False)
 ' dc.DefaultValueEnabled = False                    calling default property without argument as dc or dc() returns a reference to the DictCollection
 '   -> see test [DVS-2]                             allows it to be used like a regular object: 'VarType(dc)' and 'dc Is DictCollection' will work
@@ -141,8 +141,8 @@ Attribute VB_Exposed = True
 '   1) the default property returns items for given indexes or keys
 '   2) the default value (usually the first item) is returned when the default property is called without any argument or the argument Missing
 '   .DefaultValueEnabled defines what happens when the default property is called without argument:
-'   - True: returns either the first item, [EMPTY], or [NONEXISTING]
-'   - False: returns a reference to the DictCollection itself or in some cases [NONEXISTING] when entering endless evaluation loops
+'   - True: returns either the first item, "[EMPTY]", or "[NONEXISTING]"
+'   - False: returns a reference to the DictCollection itself or in some cases "[NONEXISTING]" when entering endless evaluation loops
 '
 ' ----------- KNOWN BUGS ----------------------------------------------------------------------------------------------------------------------------
 '   BUG001 (2018-09-08): With .EmulateDictionary=True, keys CInt(1) and CDate(1) are not recognizes as the same numeric key. The internal key
@@ -161,7 +161,7 @@ Attribute VB_Exposed = True
 ' - With .DefaultValueEnabled=True, setting the default value with Set keyword doesn't work: use 'dc = new Collection' instead of 'Set dc = new Collection'
 ' - With dc.DefaultValueEnabled=False, expressions like 'dc <> 0' lead into an endless default property evaluation loop that is stopped by force in the
 '   code. This is done by using a default value evaluation counter and checking if it exceeds the number 10000.
-' - With DefaultValueEnabled=False and ThrowErrors=False, default property will return [NONEXISTING] when called without argument.
+' - With DefaultValueEnabled=False and ThrowErrors=False, default property will return "[NONEXISTING]" when called without argument.
 '   This might be confused with the case when it is really nonexisting and DefaultValueEnabled=False
 ' - With dc.EmulateDictionary=True, monitoring a DictCollection object in the Watch Window while debugging code will sometimes add an
 '   Empty item with Missing as key. This happens because the Watch Window is calling the default property .Item(Missing) and the behavior of
@@ -2491,7 +2491,7 @@ End Function
 
 
 ' ======================== START: ADVANCED FUNCTIONALITY ============================================================================================
-' Moves an item from an index to another index
+' Moves an item from an index to another index, chainable
 Public Function Move(FromIndex As Long, ToIndex As Long) As DictCollection
     Dim fromIndex2 As Long, toIndex2 As Long
     ' adjust offset
@@ -2762,19 +2762,16 @@ End Function
 ' Unflattening algorithm:
 ' 1) if toTargetCollection, make copy of all items to new SourceCollection
 ' 2) run over all items of SourceCollection
-' 2.1) if item has flattened key with "." delimiter then
-'       - create or get temporary SubCollection for the parent key (the part before the first ".")
-'       - if it is the first item of the parent key, remember the items would-be-index (different if toTargetCollection)
-'       - add item to temporary SubCollection
-'       - remove item from SourceCollection
-' 2.2) if item has an array key in the form of "_POS" or "_POS_COUNTER" and there is no other array key for the original index then
-'       - add item to temporary DictCollection
-'       - extract original index from array key and remeber it for that item
-'       - remove item
-' 3) run over all array items in temp DictCollection and insert them to their respective target indexes in either SouceCollection or TargetCollection
-' 4) run over all temporarily stored SubCollections and add them to either SourceCollection or TargetCollection at the index where their first item was found
-' 5) do the same for all SubCollections (recoursively)
-
+' 2.1) if item has nested key with "." delimiter then
+'       - see if parent key (the part before the first ".") with subcollection already exists in Source- or TargetCollection
+'       - if yes, add item with ots subkey to this subcollection and remove the item from Source- or TargetCollecton
+'       - if no, create subcollection, add the current item to it with its subkey and replace the current item with the new subcollection
+' 2.2) if item has an array key in the form of "_POS" or "_POS_COUNTER"
+'       - check if this is the only array key for this position (array key has the highest COUNTER)
+'       - if yes, remember item and its target index
+' 2.3) if item has nested key and parent key is array key, do 2.1) and 2.2)
+' 3) run over all subcollections and call Unflattening (recoursively)
+' 4) run over all array items (2.2 or 2.3), remove them from Source- or TargetCollection and insert them back at their correct target index
 Friend Function walkDictCollectionTree(Options As WalkDictCollectionTreeOptions, Optional CollectionsInPath As Variant, Optional TargetCollection As DictCollection) As DictCollection
     Dim i As Long, j As Long, tname As String, retVal As DictCollection, maxTreeDepth As Long, SourceCollection As DictCollection, SourceCollectionSettings As DictCollection
     Dim isItemStringConvertable As Boolean, isKeyStringConvertable As Boolean, parentKey As String, currentItem As Variant, currentKey As Variant, currentItemHasKey As Boolean
@@ -2834,7 +2831,7 @@ Friend Function walkDictCollectionTree(Options As WalkDictCollectionTreeOptions,
         If SourceCollection.EmulateCollection Then SourceCollection.EmulateCollection = False
     End If
     
-    i = 0 ' run from 0 to .Count - 1
+    i = 0 ' run over all items in SourceCollection from index 0 to .Count - 1
     While i <= (SourceCollection.Count - 1)
         UtilAssignFromTo SourceCollection.ItemAt(i), currentItem
         currentItemHasKey = SourceCollection.ItemHasKey(i)
@@ -2999,6 +2996,7 @@ Friend Function walkDictCollectionTree(Options As WalkDictCollectionTreeOptions,
                     If subCollectionExists Then
                         If toTargetCollection Then
                             TargetCollection.AsDC(parentKey).Add subKey, currentItem
+                            TargetCollection.Remove TargetCollection.Count - 1
                         Else
                             SourceCollection.AsDC(parentKey).Add subKey, currentItem
                             SourceCollection.Remove i
@@ -3007,15 +3005,19 @@ Friend Function walkDictCollectionTree(Options As WalkDictCollectionTreeOptions,
                     Else
                         ' create new DictCollection with added item
                         Set dc2 = New DictCollection
-                        UtilAddArrayValue tempSubCollections, dc2
+                        UtilAddArrayValue tempSubCollections, dc2 ' remember subcollection
                         dc2.Add subKey, currentItem
                         CopyAllSettingsExceptCollectionType SourceCollection, dc2
                         If sourceCollectionHadOneBasedIndex Then dc2.ZeroBasedIndex = False
                         If sourceCollectionHadThrowErrorsTrue Then dc2.ThrowErrors = True
                         If toTargetCollection Then
-                            TargetCollection.Add parentKey, dc2 ' add new subcollection
+                            ' replace last item with new subcollection
+                            Set TargetCollection.ItemAt(TargetCollection.Count - 1) = dc2
+                            TargetCollection.KeyOfItemAt(TargetCollection.Count - 1) = parentKey
                         Else
-                            Set SourceCollection.ItemAt(i) = dc2: SourceCollection.KeyOfItemAt(i) = parentKey ' replace item with new subcollection
+                            ' replace current item with new subcollection
+                            Set SourceCollection.ItemAt(i) = dc2
+                            SourceCollection.KeyOfItemAt(i) = parentKey
                         End If
                     End If
                 End If
@@ -3038,19 +3040,20 @@ Friend Function walkDictCollectionTree(Options As WalkDictCollectionTreeOptions,
             For i = 0 To UBound(tempSubCollections)
                 Set dc2 = tempSubCollections(i)
     ' ------------------------------------------- HERE IS THE SECOND RECOURSIVE CALL -------------------------------------------
-                dc2.walkDictCollectionTree Options, CollectionsInPath, TargetCollection
+                dc2.walkDictCollectionTree Options, CollectionsInPath
             Next
         End If
         If Not IsEmpty(tempItemIndexes) Then
-            If toTargetCollection Then Set dc2 = TargetCollection Else Set dc2 = SourceCollection
+            If toTargetCollection Then Set dc3 = TargetCollection Else Set dc3 = SourceCollection
+            ' sort temp array by target index
             UtilSortArray tempItemIndexes, 0, UBound(tempItemIndexes)
             ' remove all array items
-            For i = 0 To UBound(tempItemIndexes): dc2.Remove tempItemIndexes(i)(1): Next
+            For i = 0 To UBound(tempItemIndexes): dc3.Remove tempItemIndexes(i)(1): Next
             ' insert them back at target indexes
             For i = 0 To UBound(tempItemIndexes)
                 UtilAssignFromTo tempItemIndexes(i)(2), currentItem
                 targetIndex = tempItemIndexes(i)(0)
-                dc2.Insert currentItem, targetIndex
+                dc3.Insert currentItem, targetIndex
             Next
         End If
     End If
@@ -3544,12 +3547,10 @@ Public Function TestFunctionality(Optional DebugPrint As Boolean = True) As Vari
     Dim allErrors As Variant: allErrors = Array()
     If DebugPrint Then Debug.Print "----------- Start DictCollection Functionality Test ----------------------------"
     
+    combineAndPrintTestErrors "Basic Functionality", testBasicFunctionality(False), allErrors, DebugPrint
     combineAndPrintTestErrors "Advanced Item And Key Access", testAdvancedItemAndKeyAccess(False), allErrors, DebugPrint
-    
     combineAndPrintTestErrors "Advanced Functionality", testAdvancedFunctionality(False), allErrors, DebugPrint
     combineAndPrintTestErrors "Bugfixes and Workarounds", testFixes(False), allErrors, DebugPrint
-    
-    combineAndPrintTestErrors "Basic Functionality", testBasicFunctionality(False), allErrors, DebugPrint
     
     If DebugPrint Then Debug.Print "----------- End DictCollection Functionality Test ------------------------------"
     TestFunctionality = allErrors
@@ -3585,11 +3586,11 @@ currentTest = "[COP-1] Collection object properties - DictCollection with one it
 currentTest = "[COP-2] Collection object properties - DictCollection with one item and one key must have .CollectionType=5 (filled key-value-store with items having no key)": If dc1.CollectionType <> 5 Then logError DebugPrint, errors, ("-> " & currentTest)
     
     Set dc1 = New DictCollection ' initialize class
-currentTest = "[DV-1] Default values - Default NonExistingValue must be [NONEXISTING]": If dc1.NonExistingValue <> NONEXISTING_VALUE_DEFAULT Then logError DebugPrint, errors, ("-> " & currentTest)
-    currentTest = "[DV-2] Default values - Default EmptyCollectionValue must be [EMPTY]": If dc1.EmptyCollectionValue <> EMPTY_COLLECTION_VALUE_DEFAULT Then logError DebugPrint, errors, ("-> " & currentTest)
-    currentTest = "[DV-3] Default values - Empty DictCollection must have [EMPTY] as default value": If dc1 <> dc1.EmptyCollectionValue Then logError DebugPrint, errors, ("-> " & currentTest)
-    currentTest = "[DV-4] Default values - Nonexisting item must have [NONEXISTING] as default value": If dc1(0) <> dc1.NonExistingValue Then logError DebugPrint, errors, ("-> " & currentTest)
-    currentTest = "[DV-5] Default values - Nonexisting item must have [NONEXISTING] as default value": If dc1("nonexisting") <> dc1.NonExistingValue Then logError DebugPrint, errors, ("-> " & currentTest)
+currentTest = "[DV-1] Default values - Default NonExistingValue must be '[NONEXISTING]'": If dc1.NonExistingValue <> NONEXISTING_VALUE_DEFAULT Then logError DebugPrint, errors, ("-> " & currentTest)
+    currentTest = "[DV-2] Default values - Default EmptyCollectionValue must be '[EMPTY]'": If dc1.EmptyCollectionValue <> EMPTY_COLLECTION_VALUE_DEFAULT Then logError DebugPrint, errors, ("-> " & currentTest)
+    currentTest = "[DV-3] Default values - Empty DictCollection must have '[EMPTY]' as default value": If dc1 <> dc1.EmptyCollectionValue Then logError DebugPrint, errors, ("-> " & currentTest)
+    currentTest = "[DV-4] Default values - Nonexisting item must have '[NONEXISTING]' as default value": If dc1(0) <> dc1.NonExistingValue Then logError DebugPrint, errors, ("-> " & currentTest)
+    currentTest = "[DV-5] Default values - Nonexisting item must have '[NONEXISTING]' as default value": If dc1("nonexisting") <> dc1.NonExistingValue Then logError DebugPrint, errors, ("-> " & currentTest)
     
 currentTest = "[MDV-1] Modified default values for nonexisting items and empty collections"
     Set dc1 = New DictCollection: dc1.NonExistingValue = 1: dc1.EmptyCollectionValue = 2 ' initialize class and modify default values
@@ -4696,8 +4697,8 @@ currentTest = "[IIKEC-1] .Item, .Items and .Keys must work with .EmulateCollecti
     dc1.Add UtilGetMissingValue, "ItemWithNoKey" '_index=12, int_index=11, Missing is not supported as key by Collection
     dc1.Add "String", "FirstItem" ' ext_index=1, int_index=0
     dc1.Item(14) = "LastItem" ' ext_index=14, int_index=13, -> will insert ext_index=13, int_index=12 as Empty/no key
-    If dc1.Item(0) <> dc1.NonExistingValue Then logError DebugPrint, errors, ("-> " & currentTest & ": accessing invalid indexes with .Item must return [NONEXISTING]")
-    If dc1.Item(15) <> dc1.NonExistingValue Then logError DebugPrint, errors, ("-> " & currentTest & ": accessing invalid indexes with .Item must return [NONEXISTING]")
+    If dc1.Item(0) <> dc1.NonExistingValue Then logError DebugPrint, errors, ("-> " & currentTest & ": accessing invalid indexes with .Item must return '[NONEXISTING]'")
+    If dc1.Item(15) <> dc1.NonExistingValue Then logError DebugPrint, errors, ("-> " & currentTest & ": accessing invalid indexes with .Item must return '[NONEXISTING]'")
     If dc1.Count <> 14 Then logError DebugPrint, errors, ("-> " & currentTest & ": .Count must be 15")
     If dc1.Item("") <> "ItemWithEmptyKey" Then logError DebugPrint, errors, ("-> " & currentTest & ": zero length string must be allowed as key")
     If dc1.Item(UtilGetMissingValue) <> dc1.NonExistingValue Then logError DebugPrint, errors, ("-> " & currentTest & ": Missing must not be allowed as key")
@@ -4862,29 +4863,46 @@ Private Function testAdvancedFunctionality(Optional DebugPrint As Boolean = Fals
     Dim i As Long, j As Long, Items As Variant, Keys As Variant, testdata As Variant, Val As Variant
     errors = Array()
     
-   
-currentTest = "[UNFL-1] Unflatten must restore array items in correct order"
+
+For i = 1 To 2
+    If i = 1 Then
+currentTest = "[UNFL-1A] Unflatten must restore array items in correct order"
+    Else
+currentTest = "[UNFL-1B] Unflatten to TargetArray must restore array items in correct order"
+    End If
     Set dc1 = New DictCollection: dc1.Add "_3", "item3": dc1.Add "_1", "item1": dc1.Add "_2", "item2"
-    dc1.Unflatten
+    If i = 1 Then dc1.Unflatten Else Set dc2 = New DictCollection: dc1.Unflatten dc2: Set dc1 = dc2
     If dc1.CollectionType <> 2 Then logError DebugPrint, errors, ("-> " & currentTest)
     Items = dc1.Items: If Items(0) <> "item1" Or Items(1) <> "item2" Or Items(2) <> "item3" Then logError DebugPrint, errors, ("-> " & currentTest)
     If dc1.KeyCount <> 0 Then logError DebugPrint, errors, ("-> " & currentTest)
-currentTest = "[UNFL-2] Unflatten must restore array items in correct order and leave non-unflattable keys intact"
+    If i = 1 Then
+currentTest = "[UNFL-2A] Unflatten must restore array items in correct order and leave non-unflattable keys intact"
+    Else
+currentTest = "[UNFL-2B] Unflatten to TargetArray must restore array items in correct order and leave non-unflattable keys intact"
+    End If
     Set dc1 = New DictCollection: dc1.Add "_3", "item3": dc1.Add "_1_x", "item4": dc1.Add "_1", "item1": dc1.Add "_2", "item2": dc1.Add "_1_", "item5"
-    dc1.Unflatten
+    If i = 1 Then dc1.Unflatten Else Set dc2 = New DictCollection: dc1.Unflatten dc2: Set dc1 = dc2
     If dc1.Count <> 5 Or dc1.KeyCount <> 2 Then logError DebugPrint, errors, ("-> " & currentTest)
     Items = dc1.Items: If Items(0) <> "item1" Or Items(1) <> "item2" Or Items(2) <> "item3" Or Items(3) <> "item4" Or Items(4) <> "item5" Then logError DebugPrint, errors, ("-> " & currentTest)
     Keys = dc1.Keys(False): If Keys(0) <> "_1_x" Or Keys(1) <> "_1_" Then logError DebugPrint, errors, ("-> " & currentTest)
-currentTest = "[UNFL-3] Unflatten must restore subcollection and its items"
+    If i = 1 Then
+currentTest = "[UNFL-3A] Unflatten must restore subcollection and its items"
+    Else
+currentTest = "[UNFL-3B] Unflatten to TargetArray must restore subcollection and its items"
+    End If
     Set dc1 = New DictCollection: dc1.Add "a.b", "B": dc1.Add "b.e", "E": dc1.Add "a.a", "A": dc1.Add "b._1", "D": dc1.Add "a.c", "C"
-    dc1.Unflatten
+    If i = 1 Then dc1.Unflatten Else Set dc2 = New DictCollection: dc1.Unflatten dc2: Set dc1 = dc2
     ' desired result -> { a{b{B},a{A},c{C}} , b{D,e{E} }
     If dc1.Count <> 2 Or dc1.KeyCount <> 2 Then logError DebugPrint, errors, ("-> " & currentTest)
     Items = dc1.AsDC(0).Items: If Items(0) <> "B" Or Items(1) <> "A" Or Items(2) <> "C" Then logError DebugPrint, errors, ("-> " & currentTest)
     Keys = dc1.AsDC(0).Keys: If Keys(0) <> "b" Or Keys(1) <> "a" Or Keys(2) <> "c" Then logError DebugPrint, errors, ("-> " & currentTest)
     Items = dc1.AsDC(1).Items: If Items(0) <> "D" Or Items(1) <> "E" Then logError DebugPrint, errors, ("-> " & currentTest)
     Keys = dc1.AsDC(1).Keys: If Keys(0) <> Empty Or Keys(1) <> "e" Then logError DebugPrint, errors, ("-> " & currentTest)
-currentTest = "[UNFL-4] Unflatten must create correct subtree structure"
+    If i = 1 Then
+currentTest = "[UNFL-4A] Unflatten must create correct subtree structure"
+    Else
+currentTest = "[UNFL-4B] Unflatten to TargetArray must create correct subtree structure"
+    End If
     ' this is the reverse of [FLAT-5]
     Set dc1 = New DictCollection
     dc1.Add "_1_1._1._1_1", "item1"
@@ -4894,7 +4912,7 @@ currentTest = "[UNFL-4] Unflatten must create correct subtree structure"
     dc1.Add "_3._1", "item5"
     dc1.Add "_3_1._1", "item6"
     dc1.Add "_3_1._2", "item7"
-    dc1.Unflatten
+    If i = 1 Then dc1.Unflatten Else Set dc2 = New DictCollection: dc1.Unflatten dc2: Set dc1 = dc2
     ' desired result -> { {{item1,item2}} , _1{item3} , {item4} , _3{item5} , _3_1{item6,item7} }
     If dc1.Count <> 5 Or dc1.KeyCount <> 3 Then logError DebugPrint, errors, ("-> " & currentTest)
     Items = dc1.AsDC(0).AsDC(0).Items: If Items(0) <> "item1" Or Items(1) <> "item2" Then logError DebugPrint, errors, ("-> " & currentTest)
@@ -4902,7 +4920,9 @@ currentTest = "[UNFL-4] Unflatten must create correct subtree structure"
     Items = dc1.AsDC(2).Items: If Items(0) <> "item4" Then logError DebugPrint, errors, ("-> " & currentTest)
     Items = dc1.AsDC("_3").Items: If Items(0) <> "item5" Then logError DebugPrint, errors, ("-> " & currentTest)
     Items = dc1.AsDC("_3_1").Items: If Items(0) <> "item6" Or Items(1) <> "item7" Then logError DebugPrint, errors, ("-> " & currentTest)
-    
+Next
+
+
 currentTest = "[FCL-1] Clone must copy all settings if called without arguments"
     Set dc1 = New DictCollection:
     dc1.EmulateDictionary = True
