@@ -35,42 +35,42 @@ A step-by-step introduction into the basic functionality of DictCollection. See 
 | Get an item by key:                                          | `a = dc.Item("key1")`                                        | a = 123.45                                                   |
 | Get an item by index:                                        | `a = dc.Item(0)`                                             | a = 123.45                                                   |
 |                                                              | `b = dc.Item(1)`                                             | b = "A"                                                      |
-| Default property `dc()` is shorthand for `.Item()`:          | `b = dc(1)`                                                  | b = "A"                                                      |
+| Default property `dc()` can be used as shorthand for `.Item()`: | `b = dc(1)`                                                  | b = "A"                                                      |
 | Set an item by index:                                        | `dc(0) = 100`                                                | dc.Item(0) = 100                                             |
 | Set an item by key:                                          | `dc("key1") = 200`                                           | dc.Item(0) = 200                                             |
-| Add an item by key:                                          | dc("key2") = "B"`                                            | dc.Item(2) = "B"                                             |
+| Add an item by key:                                          | dc("key2") = "B"                                             | dc.Item(2) = "B"                                             |
 | Adding a nested DictCollection:                              | `dc.Add "key3", new DictCollection`                          | dc.Item(3) = [Empty DictCollection]                          |
 | Add to nested DictCollection:                                | `dc("key3").Add "key4", 456.78`                              | dc.Item(3).Item(0) = 456.78                                  |
 |                                                              | `dc("key3").Add , "C"`                                       | dc.Item(3).Item(1) = "C"                                     |
 | Get items from nested DictCollection:                        | `c = dc("key3")("key4")`                                     | c = 456.78                                                   |
 |                                                              | `d = dc("key3")(1)`                                          | d = "C"                                                      |
 | Check if nested item exists:                                 | `dc("key3")(1) = dc.NonExistingValue`                        | false                                                        |
-| ('endless subcollection chaining')                           | `dc("key3")("wrongkey") =   dc.NonExistingValue`             | true                                                         |
+| also called 'endless subcollection chaining'                 | `dc("key3")("wrongkey") =   dc.NonExistingValue`             | true                                                         |
 | Remove an item by key:                                       | `dc.Remove("key1")`                                          | "A" is now at index 0                                        |
 | Remove an item by index:                                     | `dc.Remove(0)`                                               | "B" is now at index 0                                        |
 | Get the index of an item by key:                             | `idx = dc.IndexOfKey("key3")`                                | idx = 1                                                      |
-| Get an item's key (Empty if none):                           | `a = dc.KeyOfItemAt(0)`                                      | a = "key2"                                                   |
+| Get an item's key (returns `Empty` if none exists):          | `a = dc.KeyOfItemAt(0)`                                      | a = "key2"                                                   |
 | Check if key exists:                                         | `check = dc.Exists("key3")`                                  | check = True                                                 |
 | Change an items key:                                         | `dc.Key("key2") = "key4"`                                    | "key2" changed to "key4"                                     |
-| Change an items key while removing another                   |                                                              |                                                              |
-| item that used this key before:                              | `dc.Key("key4") = "key3"`                                    | "key4" "key3", dc.Item(1)   removed                          |
-| Get keys for each item incl. Empty:                          | `ka = dc.Keys`                                               | ka = Array("key3")                                           |
+| Change an items key while removing another item that used this key before: | `dc.Key("key4") = "key3"`                                    | "key4" changed to "key3", dc.Item(1)   removed               |
+| Get keys for each item incl. `Empty`:                        | `ka = dc.Keys`                                               | ka = Array("key3")                                           |
 | Get all items in the added order:                            | `ia = dc.Items`                                              | ia = Array("B")                                              |
 | Insert an item with key at index 0:                          | `dc.Insert "D", 0, "key5"`                                   | dc.Item(0) = "D", dc.Item(1) = "B"                           |
-| Insert an item without key at index 3 (index -1 = end):      | `dc.Insert "E", 3, ""`                                       | dc.Item(2) = Empty, dc.Item(3) = "E"                         |
-| Get all items with empty values as Array:                    | `ia = dc.Items`                                              | ia = Array("D", "B", Empty,   "E")                           |
-| Get all items without empty values as Array:                 | `ia = dc.Items(False)`                                       | ia = Array("D", "B", "E")                                    |
+| Insert an item without key at index 3 (index -1 = at end):   | `dc.Insert "E", 3, ""`                                       | dc.Item(2) = Empty, dc.Item(3) = "E"                         |
+| Get all items (incl. `Empty` items) as Array:                | `ia = dc.Items`                                              | ia = Array("D", "B", Empty,   "E")                           |
+| Get all items without `Empty` items as Array:                | `ia = dc.Items(False)`                                       | ia = Array("D", "B", "E")                                    |
 | Get all used keys in item order as Array:                    | `ka = dc.Keys(False)`                                        | ka(0) = Array("key5","key3")                                 |
-| Get all keys in sorted order as Array:                       | `ka = dc.SortedKeys`                                         | ka = Array("key3", "key5")                                   |
+| Get all keys in sorted order as Array:                       | `ka = dc.SortedKeys`                                         | ka = Array("key3","key5")                                    |
 | Remove all items from DictCollection:                        | `dc.RemoveAll`                                               | All items are removed                                        |
-| Move an item to another index:                               | `dc.Move(fromIndex, toIndex)`                                |                                                              |
-| Get an item by index (fast)                                  | `a = dc.ItemAt(Index)`                                       |                                                              |
-| Set an item by index (fast)                                  | `dc.ItemAt(Index) = a`                                       |                                                              |
-| Get an item by key (fast)                                    | `a = dc.ItemOf("key1")`                                      |                                                              |
-| Set an item by key (fast)                                    | `dc.ItemOf("key1") = a`                                      |                                                              |
-| Add (insert) a DictCollection                                | `dc.AddDC("key1",0)` at index = 0 or `dc.AddDC("key1")` after last item |                                                              |
-| Get nested DictCollections                                   | `dc.AsDC("key1").AsDC("key2")`                               | returns nested or nonexisting DictCollection                 |
-| Get or Add nested DictCollections                            | `dc.SubDC("key1").SubDC("key2")`                             | returns existing subkeys as DictCollections, nonexisting keys will be created as DictCollection |
+| Move an item to another index:                               | `dc.Move(fromIndex, toIndex)`                                | Will expand storage to `toIndex` if `.ThrowErrors = False`   |
+| Get an item by index (fast):                                 | `a = dc.ItemAt(Index)`                                       |                                                              |
+| Set an item by index (fast):                                 | `dc.ItemAt(Index) = a`                                       |                                                              |
+| Get an item by key (fast):                                   | `a = dc.ItemOf(Key)`                                         |                                                              |
+| Set an item by key (fast):                                   | `dc.ItemOf(Key) = a`                                         |                                                              |
+| Add (insert) a DictCollection:                               | `dc.AddDC(Key, AtIndex)`                                     | inserts a DictCollection at given index                      |
+|                                                              | `dc.AddDC(Key)`                                              | adds DictCollection at the end                               |
+| Get nested DictCollection:                                   | `dc.AsDC("key1").AsDC("key2")`                               | returns nested or nonexisting DictCollection                 |
+| Get or add nested DictCollections:                           | `dc.SubDC("key1").SubDC("key2")`                             | returns existing subkeys as DictCollections, nonexisting keys will be created as DictCollection |
 | Chaining DictCollection functions: `.Add()`, `.SetItem()`, `.Insert()`, `.Add2()`, `.Remove()`, `.RemoveAll()`, `.Move()` | `dc.RemoveAll().Add("a","A").Add("b","B")` `dc.Insert("D", -1).Insert("C", 2, "c")` | execute functions in chaining order: dc.Items = Array("A", "B", "C", "D")  `.Insert(.., -1, ...)` inserts item at the end |
 
 ### Settings
