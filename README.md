@@ -9,16 +9,16 @@ Read the [Comparison of Collections in VB6 and VBA](#comparison-of-collections-i
 
 ## DictCollection.cls
 
-DictCollection.cls is a mix between Scripting.Dictionary and Collection that can emulate both. It stores items with or without keys and has extended functionality for dealing with collections, items and keys.
+DictCollection.cls is a mix between Scripting.Dictionary and Collection that can emulate both. It stores items with or without keys as an ordered list and has extended functionality for dealing with subcollections. Keys are stored internally as a sorted list.
 
 ### Features
 
 - **Optimized for Debugging**: See keys and items in VB6/VBA Watch Window.
-- **Compatible**: Can fully emulate and replace Scripting.Dictionary or VB6/VBA Collection
-- **Versatile**: Can be used as Array, Key-Value-Store (Map) and Object Tree (JSON storage)
+- **Compatible**: Can emulate and replace Scripting.Dictionary or VB6/VBA Collection
+- **Versatile**: Can be used as Array (ArrayList), Key-Value-Store (Map) and Object Tree (JSON storage)
 - **Fast**: Retrieve items by index with array-like speed (faster than Dictionary and Collection)
-- **Nonthrowing Design**: Does not throw errors by default (`dc.ThrowErrors=False`)
-- **Endless Subcollection Chaining**: `dc("key1")("key2")("nonexisting_key")("key3")` always returns Collections that can be NONEXISTING, EMPTY or FILLED. Checking if a nested item exists is a one-liner.
+- **Nonthrowing Design**: Does not throw errors by default (configurable using `dc.ThrowErrors`)
+- **Endless Subcollection Chaining**: `dc("key1")("key2")("nonexisting_key")("key3")` always returns DictCollections that can be NONEXISTING, EMPTY or FILLED. Checking if a nested item exists is a one-liner.
 - **High Test Coverage**: `.SelfTest()` covers all important functions and emulation features
 
 ### How to use
@@ -29,7 +29,7 @@ A step-by-step introduction into the basic functionality of DictCollection. See 
 | ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------ |
 | Create an empty collection:                                  | `Set dc = New DictCollection`                                |                                                              |
 | Add an item with a key:                                      | `dc.Add "key1", 123.45`                                      | dc.Item(0) = 123.45                                          |
-| Add an item without a key:                                   | `dc.Add , "A"`                                               | dc.Item(1) = "A"                                             |
+| Add an item without a key:                                   | `dc.Add , "A"` or `dc.Add "", "A"`                           | dc.Item(1) = "A"                                             |
 | Get the number or items:                                     | `n = dc.Count`                                               | n = 2                                                        |
 | Get the number or keys:                                      | `k = dc.KeyCount`                                            | k = 1                                                        |
 | Get an item by key:                                          | `a = dc.Item("key1")`                                        | a = 123.45                                                   |
@@ -38,27 +38,28 @@ A step-by-step introduction into the basic functionality of DictCollection. See 
 | Default property `dc()` can be used as shorthand for `.Item()`: | `b = dc(1)`                                                  | b = "A"                                                      |
 | Set an item by index:                                        | `dc(0) = 100`                                                | dc.Item(0) = 100                                             |
 | Set an item by key:                                          | `dc("key1") = 200`                                           | dc.Item(0) = 200                                             |
-| Add an item by key:                                          | dc("key2") = "B"                                             | dc.Item(2) = "B"                                             |
+| Add an item by key:                                          | `dc("key2") = "B"`                                           | dc.Item(2) = "B"                                             |
 | Adding a nested DictCollection:                              | `dc.Add "key3", new DictCollection`                          | dc.Item(3) = [Empty DictCollection]                          |
 | Add to nested DictCollection:                                | `dc("key3").Add "key4", 456.78`                              | dc.Item(3).Item(0) = 456.78                                  |
 |                                                              | `dc("key3").Add , "C"`                                       | dc.Item(3).Item(1) = "C"                                     |
 | Get items from nested DictCollection:                        | `c = dc("key3")("key4")`                                     | c = 456.78                                                   |
 |                                                              | `d = dc("key3")(1)`                                          | d = "C"                                                      |
-| Check if nested item exists:                                 | `dc("key3")(1) = dc.NonExistingValue`                        | false                                                        |
-| also called 'endless subcollection chaining'                 | `dc("key3")("wrongkey") =   dc.NonExistingValue`             | true                                                         |
+| Check if nested item exists:                                 | `dc("key3")(1) = dc.NonExistingValue`                        | false (yes it exists)                                        |
+|                                                              | `dc("key3")("wrongkey") =   dc.NonExistingValue`             | true (no it doesn't)                                         |
+| Get subcollection items even if they don't exist, also called 'endless subcollection chaining' | `a = dc("key3")("wrongkey")(4)("x")`                         | a = "[NONEXISTING]"                                          |
 | Remove an item by key:                                       | `dc.Remove("key1")`                                          | "A" is now at index 0                                        |
 | Remove an item by index:                                     | `dc.Remove(0)`                                               | "B" is now at index 0                                        |
 | Get the index of an item by key:                             | `idx = dc.IndexOfKey("key3")`                                | idx = 1                                                      |
 | Get an item's key (returns `Empty` if none exists):          | `a = dc.KeyOfItemAt(0)`                                      | a = "key2"                                                   |
 | Check if key exists:                                         | `check = dc.Exists("key3")`                                  | check = True                                                 |
 | Change an items key:                                         | `dc.Key("key2") = "key4"`                                    | "key2" changed to "key4"                                     |
-| Change an items key while removing another item that used this key before: | `dc.Key("key4") = "key3"`                                    | "key4" changed to "key3", dc.Item(1)   removed               |
-| Get keys for each item incl. `Empty`:                        | `ka = dc.Keys`                                               | ka = Array("key3")                                           |
+| Change an items key while removing another item that used this key before (with `.ThrowErrors = False`): | `dc.Key("key4") = "key3"`                                    | "key4" changed to "key3", dc.Item(1)   removed               |
+| Get keys for each item (include `Empty` values):             | `ka = dc.Keys`                                               | ka = Array("key3")                                           |
 | Get all items in the added order:                            | `ia = dc.Items`                                              | ia = Array("B")                                              |
 | Insert an item with key at index 0:                          | `dc.Insert "D", 0, "key5"`                                   | dc.Item(0) = "D", dc.Item(1) = "B"                           |
 | Insert an item without key at index 3 (index -1 = at end):   | `dc.Insert "E", 3, ""`                                       | dc.Item(2) = Empty, dc.Item(3) = "E"                         |
-| Get all items (incl. `Empty` items) as Array:                | `ia = dc.Items`                                              | ia = Array("D", "B", Empty,   "E")                           |
-| Get all items without `Empty` items as Array:                | `ia = dc.Items(False)`                                       | ia = Array("D", "B", "E")                                    |
+| Get all items (include `Empty` values) as Array:             | `ia = dc.Items`                                              | ia = Array("D", "B", Empty,   "E")                           |
+| Get all items without `Empty` values as Array:               | `ia = dc.Items(False)`                                       | ia = Array("D", "B", "E")                                    |
 | Get all used keys in item order as Array:                    | `ka = dc.Keys(False)`                                        | ka(0) = Array("key5","key3")                                 |
 | Get all keys in sorted order as Array:                       | `ka = dc.SortedKeys`                                         | ka = Array("key3","key5")                                    |
 | Remove all items from DictCollection:                        | `dc.RemoveAll`                                               | All items are removed                                        |
@@ -69,29 +70,32 @@ A step-by-step introduction into the basic functionality of DictCollection. See 
 | Set an item by key (fast):                                   | `dc.ItemOf(Key) = a`                                         |                                                              |
 | Add (insert) a DictCollection:                               | `dc.AddDC(Key, AtIndex)`                                     | inserts a DictCollection at given index                      |
 |                                                              | `dc.AddDC(Key)`                                              | adds DictCollection at the end                               |
-| Get nested DictCollection:                                   | `dc.AsDC("key1").AsDC("key2")`                               | returns nested or nonexisting DictCollection                 |
-| Get or add nested DictCollections:                           | `dc.SubDC("key1").SubDC("key2")`                             | returns existing subkeys as DictCollections, nonexisting keys will be created as DictCollection |
-| Chaining DictCollection functions: `.Add()`, `.SetItem()`, `.Insert()`, `.Add2()`, `.Remove()`, `.RemoveAll()`, `.Move()` | `dc.RemoveAll().Add("a","A").Add("b","B")` `dc.Insert("D", -1).Insert("C", 2, "c")` | execute functions in chaining order: dc.Items = Array("A", "B", "C", "D")  `.Insert(.., -1, ...)` inserts item at the end |
+|                                                              | `dc.AddDC(KeyA).AddDC(KeyB).AddDC(KeyC)`                     | adds multiple DictCollections after each other               |
+| Get nested DictCollection:                                   | `dc.AsDC(KeyA).AsDC(KeyAA)`                                  | returns nested or nonexisting DictCollection                 |
+| Get or add nested DictCollections:                           | `dc.SubDC(KeyA).SubDC(KeyAA)`                                | returns existing subkeys as DictCollections, nonexisting keys will be created as DictCollection |
+| Chainable DictCollection functions: `.Add()`, `.Add2()`, `.AddDC()`, `.SetItem()`, `.Insert()`, `.Remove()`, `.RemoveAll()`, `.Move()` | `dc.RemoveAll().Add("a","A").Add("b","B")` `dc.Insert("D", -1).Insert("C", 2, "c")` | executes functions in chaining order: dc.Items = Array("A", "B", "C", "D")  `.Insert(…, -1, …)` inserts item at the end |
+
+[Other Collection Functions](#other-collection-functions) are described after Settings.
 
 ### Settings
 
-| Setting                                             | Explanation                                                  |
-| --------------------------------------------------- | ------------------------------------------------------------ |
-| `dc.ThowErrors = False` (default)                   | will return `.NonExistingValue` or `Empty` when accessing nonexistent indexes or keys |
-| `dc.ThowErrors = True`                              | will throw errors when accessing nonexistent indexes or keys |
-| `dc.LazySorting = True` (default)                   | will sort key array at first access using a key and thus speed up `.Add` |
-| `dc.LazySorting = False`                            | will sort key array at every `.Add` if key is used           |
-| `dc.CompareMode = 0` (default)                      | keys are case-sensitive, will binary compare keys, fastest   compare method |
-| `dc.CompareMode = 1`                                | keys are case-insensitive, Ä = ä = A = a = á = Á             |
-| `dc.CompareMode = 2`                                | keys are case-insensitive (only MSAccess), uses localeID for matching |
-| `dc.EmulateDictionary = True`                       | DictCollection will behave like Scripting.Dictionary (no indexes, just keys) |
-| `dc.EmulateCollection = True`                       | DictCollection will behave like VB Collection (`Collection.Add` implemented as `DictCollection.Add2`) |
-| `dc.ZeroBasedIndex = True` (default)                | first item can be accessed with index = 0 (when ZeroBasedIndex=False, first index = 1) |
-| `dc.DefaultValueEnabled = True` (default)           | calling default property without argument returns either the   first item, "[EMPTY]", or "[NONEXISTING]", allows endless subcollection chaining: `Set dc2 = dc1("a")("nonexisting")("b")`   (ThrowErrors=False) |
-| `dc.DefaultValueEnabled = False`                    | calling default property without argument as dc or dc()   returns a reference to the DictCollection, allows it to be used like a regular object: 'VarType(dc)' and   'dc Is DictCollection' will work |
-| `dc.NonExistingValue = "[NONEXISTING]"` (default)   | the value to be returned for nonexisting items if ThrowError=False; can be used to overwrite this value with anything except objects, e.g. `Empty, "", 0, False` |
-| `dc.EmptyCollectionValue = "[EMPTY]"` (default)     | the default value of empty DictCollections (ThrowError=False,   DefaultValueEnabled=True); can be used to overwrite this value with anything except   objects, e.g. Empty, "", 0, False |
-| `dc.CollectionType` sets/gets the collection type:  | 0 = NonExisting, 1 = Empty Array, 2 = Filled Array, 3 = Empty Key-Value-Store, 4 = Filled Key-Value-Store, 5 = Key-Value-Store with at least one item having no key |
+| Setting                                           | Explanation                                                  |
+| ------------------------------------------------- | ------------------------------------------------------------ |
+| `dc.ThowErrors = False` (default)                 | will return `.NonExistingValue` or `Empty` when accessing nonexistent indexes or keys |
+| `dc.ThowErrors = True`                            | will throw errors when accessing nonexistent indexes or keys |
+| `dc.LazySorting = True` (default)                 | will sort key array at first read access and thus speed up `.Add()` |
+| `dc.LazySorting = False`                          | will sort key array at every `.Add()` if key is used         |
+| `dc.CompareMode = 0` (default)                    | keys are case-sensitive, will binary compare keys, fastest   compare method |
+| `dc.CompareMode = 1`                              | keys are case-insensitive, Ä = ä = A = a = á = Á             |
+| `dc.CompareMode = 2`                              | keys are case-insensitive (only MSAccess), uses localeID for matching |
+| `dc.EmulateDictionary = True`                     | DictCollection will behave like Scripting.Dictionary (no indexes, just keys) |
+| `dc.EmulateCollection = True`                     | DictCollection will behave like VB Collection (`Collection.Add()` implemented as `DictCollection.Add2()`) |
+| `dc.ZeroBasedIndex = True` (default)              | first item can be accessed with index = 0 (when ZeroBasedIndex=False, first index = 1) |
+| `dc.DefaultValueEnabled = True` (default)         | calling default property without argument returns either the first item, `"[EMPTY]"`, or `"[NONEXISTING]"`, allows endless subcollection chaining: `Set dc2 = dc1("a")("nonexisting")("b")`   (if `.ThrowErrors = False`) |
+| `dc.DefaultValueEnabled = False`                  | calling default property without argument as dc or dc()   returns a reference to the DictCollection, allows it to be used like a regular object: 'VarType(dc)' and   'dc Is DictCollection' will work |
+| `dc.NonExistingValue = "[NONEXISTING]"` (default) | the value to be returned for nonexisting items if ThrowError=False; can be used to overwrite this value with anything except objects, e.g. `Empty`, `""`, `0`, `False` |
+| `dc.EmptyCollectionValue = "[EMPTY]"` (default)   | the default value of empty DictCollections (ThrowError=False,   DefaultValueEnabled=True); can be used to overwrite this value with anything except   objects, e.g. Empty, "", 0, False |
+| `dc.CollectionType`                               | sets/gets the collection type: 0 = NonExisting, 1 = Empty Array, 2 = Filled Array, 3 = Empty Key-Value-Store, 4 = Filled Key-Value-Store, 5 = Key-Value-Store with at least one item having no key |
 
 ### Other Collection Functions
 
@@ -135,20 +139,29 @@ A step-by-step introduction into the basic functionality of DictCollection. See 
 
 ### Utility Functions
 
-| What                                            | How                                                          |
-| ----------------------------------------------- | ------------------------------------------------------------ |
-| Get missing argument (Error 448) as Variant     | `dc.UtilGetMissingValue([DoNotPassAnythingHere])`            |
-| Assigns object or value to Variant variable     | `dc.UtilAssignFromTo(FromVariable, ToVariable)`              |
-| Add value to array (creates one)                | `dc.UtilAddArrayValue(Arr As Variant, Val As Variant)`       |
-| Find index of value in array or return -1       | `dc.UtilFindArrayIndex(Arr, Val) As Long`                    |
-| Remove a value from an array by index           | `dc.UtilRemoveArrayValueByIndex(arr, Index)`                 |
-| Get array dimensions (0 = uninitialized)        | `dc.UtilArrayDimensions(Arr) As Integer`                     |
-| Remove a value from an array                    | `dc.UtilRemoveArrayValue(Arr, Val)`                          |
-| Sort one/two-dimensional/nested array           | `dc.UtilSortArray(Arr, FromIndex, ToIndex)`                  |
-| Sort one/two-dimensional/nested array (StrComp) | `dc.UtilSortStringArray(Arr, FromIndex, ToIndex,   CompareMode)` |
-| Check if text has only number chars             | `dc.UtilStringConsistsOfNumericAsciiChars(Text) As   Boolean` |
-| Build concatenated string by repeating a text   | `dc.UtilStringRepeat(Text, NumberOfTimes) As String`         |
-| Check if text starts with another text          | `dc.UtilStringStartsWith(Text, SearchText, [CompareMode]) As Boolean` |
+| What                                                    | How                                                          |
+| ------------------------------------------------------- | ------------------------------------------------------------ |
+| Get missing argument (Error 448) as Variant             | `dc.UtilGetMissingValue([DoNotPassAnythingHere])`            |
+| Assigns object or value to Variant variable             | `dc.UtilAssignFromTo(FromVariable, ToVariable)`              |
+| Add value to array (creates one)                        | `dc.UtilAddArrayValue(Arr As Variant, Val As Variant)`       |
+| Find index of value in array or return -1               | `dc.UtilFindArrayIndex(Arr, Val) As Long`                    |
+| Remove a value from an array by index                   | `dc.UtilRemoveArrayValueByIndex(arr, Index)`                 |
+| Get array dimensions (0 = uninitialized)                | `dc.UtilArrayDimensions(Arr) As Integer`                     |
+| Remove a value from an array                            | `dc.UtilRemoveArrayValue(Arr, Val)`                          |
+| Sort one/two-dimensional/nested array                   | `dc.UtilSortArray(Arr, FromIndex, ToIndex)`                  |
+| Sort one/two-dimensional/nested array using `StrComp()` | `dc.UtilSortStringArray(Arr, FromIndex, ToIndex,   CompareMode)` |
+| Check if text has only number chars                     | `dc.UtilStringConsistsOfNumericAsciiChars(Text) As   Boolean` |
+| Build concatenated string by repeating a text           | `dc.UtilStringRepeat(Text, NumberOfTimes) As String`         |
+| Check if text starts with another text                  | `dc.UtilStringStartsWith(Text, SearchText, [CompareMode]) As Boolean` |
+
+### Demos and Use Cases (Todo)
+#### Storing and retrieving data in object trees
+#### Determining unique or distict keys
+#### Getting a sorted file list from a folder/directory
+#### Save DictCollection data to JSON
+#### Migrate code that uses Scripting.Dictionary to DictCollection
+#### Migrate code that uses Collection to DictCollection
+#### Save Scripting.Dictionary data to JSON
 
 ## DictCollection.vbs
 
@@ -217,6 +230,27 @@ DictCollection.vbs is a stripped-down VBScript version of DictCollection.cls. It
 | `dc.NonExistingValue = "[NONEXISTING]"` (default)   | the value to be returned for nonexisting items if ThrowError=False; can be used to overwrite this value with anything except objects, e.g. `Empty, "", 0, False` |
 | `dc.EmptyCollectionValue = "[EMPTY]"` (default)     | the default value of empty DictCollections (ThrowError=False,   DefaultValueEnabled=True); can be used to overwrite this value with anything except objects, e.g. Empty, "", 0, False |
 | `dc.CollectionType` sets/gets the collection type:  | 0 = NonExisting, 1 = Empty Array, 2 = Filled Array, 3 = Empty Key-Value-Store, 4 = Filled Key-Value-Store, 5 = Key-Value-Store with at least one item having no key |
+
+### Other Collection Functions
+
+| What                                                        | How                                                          |
+| ----------------------------------------------------------- | ------------------------------------------------------------ |
+| Collection-compatible Add function                          | `dc.Add2(Item, [Key], [Before], [After]) As DictCollection`  |
+| Find all keys that start with text and return as Array      | `dc.FindKeysThatStartWith(SearchText, [CompareMode]) As Variant` |
+
+
+### Utility Functions
+
+| What                                                    | How                                                          |
+| ------------------------------------------------------- | ------------------------------------------------------------ |
+| Add value to array (creates one)                        | `dc.UtilAddArrayValue(Arr As Variant, Val As Variant)`       |
+| Find index of value in array or return -1               | `dc.UtilFindArrayIndex(Arr, Val) As Long`                    |
+| Remove a value from an array by index                   | `dc.UtilRemoveArrayValueByIndex(arr, Index)`                 |
+| Get array dimensions (0 = uninitialized)                | `dc.UtilArrayDimensions(Arr) As Integer`                     |
+| Remove a value from an array                            | `dc.UtilRemoveArrayValue(Arr, Val)`                          |
+| Sort one/two-dimensional/nested array                   | `dc.UtilSortArray(Arr, FromIndex, ToIndex)`                  |
+| Check if text starts with another text                  | `dc.UtilStringStartsWith(Text, SearchText, [CompareMode]) As Boolean` |
+
 
 # Comparison of Collections in VB6 and VBA
 

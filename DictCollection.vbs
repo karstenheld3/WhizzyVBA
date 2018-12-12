@@ -3,7 +3,7 @@
 set dc = new DictCollection: dc.SelfTest(true): dc.DemoBasicFunctionality
 
 ' ===================================================================================================================================================
-' DictCollection 026 (VBScript Version) - A mix between Dictionary and Collection that can emulate both
+' DictCollection 027 (VBScript Version) - A mix between Dictionary and Collection that can emulate both
 ' Karsten Held 2016-2018, karstenheld3@gmail.com, MIT License
 '
 ' ----------- HOW TO USE ----------------------------------------------------------------------------------------------------------------------------
@@ -58,6 +58,18 @@ set dc = new DictCollection: dc.SelfTest(true): dc.DemoBasicFunctionality
 '                                                   can be used to overwrite this value with anything except objects, e.g. Empty or 0
 ' dc.EmptyCollectionValue = "[EMPTY]" (default)     the default value of empty DictCollections if ThrowError=False and DefaultValueEnabled=True
 '                                                   can be used to overwrite this value with anything except objects, e.g. Empty or 0
+' ----------- OTHER DICTCOLLECTION FUNCTIONS ----------------------------------------------------------------------------------------------------------
+' Collection-compatible Add function                dc.Add2(Item, [Key], [Before], [After]) As DictCollection
+' Find all keys that start with text (as Array)     dc.FindKeysThatStartWith(SearchText, [CompareMode]) As Variant
+'
+' ----------- OTHER UTILITY FUNCTIONS ----------------------------------------------------------------------------------------------------------------
+' Add value to array (creates one)                  UNTESTED dc.UtilAddArrayValue(Arr As Variant, Val As Variant)
+' Find index of value in array or return -1         dc.UtilFindArrayIndex(Arr, Val) As Long
+' Remove a value from an array by index             dc.UtilRemoveArrayValueByIndex(arr, Index)
+' Remove a value from an array                      dc.UtilRemoveArrayValue(Arr, Val)
+' Sort one/two-dimensional/nested array             UNTESTED dc.UtilSortArray(Arr, FromIndex, ToIndex)
+' Check if text starts with another text            UNTESTED dc.UtilStringStartsWith(Text, SearchText, [CompareMode]) As Boolean
+'
 ' ===================================================================================================================================================
 ' KNOWN BUGS: None
 ' KNOWN PROBLEMS:
@@ -96,7 +108,7 @@ Private mCompareMode ' switches between case sensitive and case insensitive key 
 ' vbDatabaseCompare = 2 case insensitive, can only be used in Microsoft Access VBA
 '                       will determine the sort order using the local ID of the database
 Private mLazySorting  ' true: will not sort keys while adding but later when keys are searched
-Private mKeysSorted  ' true: allKeys array is sorted
+Private mKeysAresortedAndUnique  ' true: allKeys array is sorted and all keys are unique
 Private mExternalIndexOffset  ' 1: Collection compatible, 0: Scripting.Dictionary compatible
 Private mEmulateCollection  ' if true, emulates Collection behavior
 Private mEmulateScriptingDictionary  ' if true, emulates Scripting.Dictionary behavior
@@ -127,7 +139,7 @@ Private Sub init()
 
     applyDefaultAccessSettings
     mLazySorting = LAZYSORTING_DEFAULT
-    mKeysSorted = False
+    mKeysAresortedAndUnique = False
     initializeItemArray
     uninitializeKeyArray
 End Sub
@@ -226,19 +238,19 @@ End Sub
 Public Sub EnsureAllItemsHaveKeys()
     Dim i, keyToTest, keySubCounter, result
     ' sort if necessary
-    If mLazySorting And mKeyCount > 1 And (Not mKeysSorted) Then sortKeysAndRemoveDuplicates: mKeysSorted = True
+    If mLazySorting And mKeyCount > 1 And (Not mKeysAresortedAndUnique) Then sortKeysAndRemoveDuplicates: mKeysAresortedAndUnique = True
     ' initialize key array if necessary
     If mKeyCount = -1 Then initializeKeyArray
     For i = 0 To mItemCount
         If allItemKeyIndexes(i) = -1 Then
             ' test key
             keyToTest = "_" & CStr(i)
-            Set result = findKeyIndex(keyToTest)
+            Set result = internalFindKeyIndex(keyToTest, mCompareMode)
             keySubCounter = 0
             While result.Exact And keySubCounter <= 1000
                 ' test key with subnumber
                 keyToTest = "_" & i & "_" & CStr(keySubCounter)
-                Set result = findKeyIndex(keyToTest)
+                Set result = internalFindKeyIndex(keyToTest, mCompareMode)
                 keySubCounter = keySubCounter + 1
             Wend
             If (Not result.Exact) And (keySubCounter <= 1000) Then
@@ -317,7 +329,7 @@ Public Property Let CompareMode(Value)
             Err.Raise 5, "Invalid procedure call or argument": Exit Property
         Else
             mCompareMode = Value
-            If mKeyCount > 0 Then sortKeys 0, (mKeyCount - 1) 're-sort keys so that findKeyIndex will work as intended
+            If mKeyCount > 0 Then sortKeys 0, (mKeyCount - 1) 're-sort keys so that internalFindKeyIndex will work as intended
         End If
     End If
 End Property
@@ -327,7 +339,7 @@ Public Property Get LazySorting() : LazySorting = mLazySorting: End Property
 Public Property Let LazySorting(Value)
     mLazySorting = Value
     ' sort if necessary
-    If Not mLazySorting And mKeyCount > 1 And (Not mKeysSorted) Then sortKeysAndRemoveDuplicates: mKeysSorted = True
+    If Not mLazySorting And mKeyCount > 1 And (Not mKeysAresortedAndUnique) Then sortKeysAndRemoveDuplicates: mKeysAresortedAndUnique = True
 End Property
 Public Property Get ZeroBasedIndex() : ZeroBasedIndex = (mExternalIndexOffset = 0): End Property
 Public Property Let ZeroBasedIndex(Value)
@@ -427,7 +439,7 @@ Public Property Get Item(IndexOrKey)
         action = 2 ' default value
     ElseIf mItemCount > 0 Then
         action = 1 ' nonexisting/not found
-        If mKeyCount > 1 And mLazySorting And (Not mKeysSorted) Then sortKeysAndRemoveDuplicates: mKeysSorted = True
+        If mKeyCount > 1 And mLazySorting And (Not mKeysAresortedAndUnique) Then sortKeysAndRemoveDuplicates: mKeysAresortedAndUnique = True
         If mEmulateScriptingDictionary Then
             Set result = evaluateIndexOrKey(convertScriptingDictionaryToDictCollectionKey(IndexOrKey))
         ElseIf mEmulateCollection Then
@@ -559,7 +571,7 @@ Private Sub internalSetItem(IndexOrKey, Value)
             action = 3 ' not found/default value
         End If
     Else
-        If mKeyCount > 1 And mLazySorting And (Not mKeysSorted) Then sortKeysAndRemoveDuplicates: mKeysSorted = True
+        If mKeyCount > 1 And mLazySorting And (Not mKeysAresortedAndUnique) Then sortKeysAndRemoveDuplicates: mKeysAresortedAndUnique = True
         set result = evaluateIndexOrKey(IndexOrKey)
         If result.Index < 0 Or result.Index >= mItemCount Then
             ' key or index was not found
@@ -745,20 +757,20 @@ Private Sub internalAddItem(Item ,  Key, AtIndex)
         If mLazySorting And Not mThrowErrors Then
             If AtIndex > -1 Then
                 ' key was passed and item will be put somewhere in item array -> sort before because key collisions can't be fixed after this insert
-                If Not mKeysSorted And mKeyCount > 1 Then sortKeysAndRemoveDuplicates: mKeysSorted = True
-                Set newKey = findKeyIndex(Key) 'find key
+                If Not mKeysAresortedAndUnique And mKeyCount > 1 Then sortKeysAndRemoveDuplicates: mKeysAresortedAndUnique = True
+                Set newKey = internalFindKeyIndex(Key, mCompareMode) 'find key
             Else
                 ' put key to position after last
                 newKey.Index = mKeyCount
                 newKey.Exact = False
-                mKeysSorted = False
+                mKeysAresortedAndUnique = False
             End If
         ElseIf mLazySorting And mThrowErrors Then
             ' key was passed and we need to check if key already exists -> sort before because otherwise we can't throw an error
-            If Not mKeysSorted And mKeyCount > 1 Then sortKeysAndRemoveDuplicates: mKeysSorted = True
-            Set newKey = findKeyIndex(Key) 'find key
+            If Not mKeysAresortedAndUnique And mKeyCount > 1 Then sortKeysAndRemoveDuplicates: mKeysAresortedAndUnique = True
+            Set newKey = internalFindKeyIndex(Key, mCompareMode) 'find key
         Else
-            Set newKey = findKeyIndex(Key) 'find key
+            Set newKey = internalFindKeyIndex(Key, mCompareMode) 'find key
         End If
     Else
         newKey.Exact = False
@@ -813,7 +825,7 @@ Private Sub internalAddItem(Item ,  Key, AtIndex)
             ' STEP 2: insert key in keyArray
             insertKey Key, newKey.Index, newItemIndex
             ' invalidate sorting
-            If mLazySorting Then mKeysSorted = False
+            If mLazySorting Then mKeysAresortedAndUnique = False
         Else
             allItemKeyIndexes(newItemIndex) = -1 ' set to -1 = no key exists for this item
         End If
@@ -833,7 +845,7 @@ Public Function Remove(IndexOrKey)
     If mItemCount < 0 Then Exit Function
     Dim result, found, key2
     Set result = new EvaluateIndexOrKeyResult 
-    If mKeyCount > 1 And mLazySorting And (Not mKeysSorted) Then sortKeysAndRemoveDuplicates: mKeysSorted = True
+    If mKeyCount > 1 And mLazySorting And (Not mKeysAresortedAndUnique) Then sortKeysAndRemoveDuplicates: mKeysAresortedAndUnique = True
     If mEmulateScriptingdictionary Then
         key2 = convertScriptingDictionaryToDictCollectionKey(IndexOrKey)
         set result = evaluateIndexOrKey(key2)
@@ -920,11 +932,11 @@ End Sub
 Public Function Exists(Key)
     Dim retVal 
     If mKeyCount > -1 Then
-        If mLazySorting And (Not mKeysSorted) Then sortKeysAndRemoveDuplicates: mKeysSorted = True
+        If mLazySorting And (Not mKeysAresortedAndUnique) Then sortKeysAndRemoveDuplicates: mKeysAresortedAndUnique = True
         If mEmulateScriptingdictionary Then
-            retVal = findKeyIndex(convertScriptingDictionaryToDictCollectionKey(Key)).Exact
+            retVal = internalFindKeyIndex(convertScriptingDictionaryToDictCollectionKey(Key), mCompareMode).Exact
         Else
-            retVal = findKeyIndex(CStr(Key)).Exact
+            retVal = internalFindKeyIndex(CStr(Key), mCompareMode).Exact
         End If
     End If
     Exists = retVal
@@ -937,14 +949,14 @@ End Function
 ' returns the number of stored items (including Empty ones)
 Public Property Get Count()
     ' sort keys and remove duplicate keys + their items, then count afterwards
-    If mKeyCount > 1 And mLazySorting And (Not mKeysSorted) Then sortKeysAndRemoveDuplicates: mKeysSorted = True
+    If mKeyCount > 1 And mLazySorting And (Not mKeysAresortedAndUnique) Then sortKeysAndRemoveDuplicates: mKeysAresortedAndUnique = True
     if mItemCount = -1 then Count = 0 else Count = mItemCount
 End Property
 
 ' returns the number of stored keys
 Public Property Get KeyCount()
     ' sort keys and remove duplicate keys + their items, then count afterwards
-    If mKeyCount > 1 And mLazySorting And (Not mKeysSorted) Then sortKeysAndRemoveDuplicates: mKeysSorted = True
+    If mKeyCount > 1 And mLazySorting And (Not mKeysAresortedAndUnique) Then sortKeysAndRemoveDuplicates: mKeysAresortedAndUnique = True
     if mKeyCount = -1 then KeyCount = 0 else KeyCount = mKeyCount 
 End Property
 
@@ -973,10 +985,10 @@ Public Function IndexOfKey(Key)
             IndexOfKey = retVal: Exit Function 
         end if
     End If
-    If mKeyCount > 1 And mLazySorting And (Not mKeysSorted) Then sortKeysAndRemoveDuplicates: mKeysSorted = True
+    If mKeyCount > 1 And mLazySorting And (Not mKeysAresortedAndUnique) Then sortKeysAndRemoveDuplicates: mKeysAresortedAndUnique = True
     Dim fkr
     set fkr = new FindKeyResult
-    set fkr = findKeyIndex(result.Key)
+    set fkr = internalFindKeyIndex(result.Key, mCompareMode)
     If fkr.Exact Then
         Dim itemIndex 
         itemIndex = allKeyItemIndexes(fkr.Index)
@@ -1057,7 +1069,7 @@ Public Property Let Key(Previous, Value)
         End If
     End If
     
-    If mKeyCount > 1 And mLazySorting And (Not mKeysSorted) Then sortKeysAndRemoveDuplicates: mKeysSorted = True
+    If mKeyCount > 1 And mLazySorting And (Not mKeysAresortedAndUnique) Then sortKeysAndRemoveDuplicates: mKeysAresortedAndUnique = True
     Dim foundOldKey
     Set foundOldKey = New FindKeyResult
     ' find index of previous key
@@ -1068,7 +1080,7 @@ Public Property Let Key(Previous, Value)
     Else
         previous2 = CStr(Previous)
     End If
-    Set foundOldKey = findKeyIndex(previous2)
+    Set foundOldKey = internalFindKeyIndex(previous2, mCompareMode)
     
     If Not foundOldKey.Exact Then
         ' previous key not found, emulate Scripting.Dictionary behavior for nonexisting keys
@@ -1096,7 +1108,7 @@ Public Property Let Key(Previous, Value)
     Else
         Dim foundNewKey: Set foundNewKey = New FindKeyResult
         ' replace found previous (old) key
-        set foundNewKey = findKeyIndex(value2)
+        set foundNewKey = internalFindKeyIndex(value2, mCompareMode)
         If foundNewKey.Exact Then
             ' new key exists!
             ' Emulate Scripting.Dictionary behavior
@@ -1155,7 +1167,7 @@ End Property
 ' VBScript Change: properties that return arrays cannot have parameters -> removed IncludeEmptyValues
 Public Property Get Keys()
     Dim retVal, keyIndex 
-    If mKeyCount > 0 And mLazySorting And (Not mKeysSorted) Then sortKeysAndRemoveDuplicates: mKeysSorted = True
+    If mKeyCount > 0 And mLazySorting And (Not mKeysAresortedAndUnique) Then sortKeysAndRemoveDuplicates: mKeysAresortedAndUnique = True
     If mItemCount < 1 Then
         retVal = Array()
     Else
@@ -1188,7 +1200,7 @@ End Property
 ' Variant array instead of String arrray because then it can also be used with Scripting.Dictionary emulation
 Public Property Get SortedKeys() 
     Dim retVal 
-    If mKeyCount > 0 And mLazySorting And (Not mKeysSorted) Then sortKeysAndRemoveDuplicates: mKeysSorted = True
+    If mKeyCount > 0 And mLazySorting And (Not mKeysAresortedAndUnique) Then sortKeysAndRemoveDuplicates: mKeysAresortedAndUnique = True
     If mItemCount < 1 Or mKeyCount < 1 Then
         retVal = Array()
     Else
@@ -1227,6 +1239,32 @@ End Property
 
 ' returns a reference to the internal items array
 Public Property Get InternalItems(): InternalItems = allItems: End Property
+
+' UNTESTED
+' returns all keys that start with SearchText as variant array containing the internal String representation of the keys
+Public Function FindKeysThatStartWith(SearchText, CompareMode)
+    Dim retVal, i
+    Set result = New FindKeyResult
+    retVal = Array()
+    If mKeyCount > 1 Then
+        If mLazySorting And (Not mKeysAreSortedAndUnique) Then sortKeysAndRemoveDuplicates: mKeysAreSortedAndUnique = True
+        set result = internalFindKeyIndex(SearchText, CompareMode)
+        If result.Index <= (mKeyCount - 1) Then
+            ' go downwards and add all matching keys to array, stop on first key that does not match
+            For i = result.Index To 0 Step -1
+                If UtilStringStartsWith(allKeys(i), SearchText, CompareMode) Then UtilAddArrayValue retVal, allKeys(i) Else Exit For
+            Next
+            ' go upwards and add all matching keys to array, stop on first key that does not match
+            For i = result.Index + 1 To (mKeyCount - 1)
+                If UtilStringStartsWith(allKeys(i), SearchText, CompareMode) Then UtilAddArrayValue retVal, allKeys(i) Else Exit For
+            Next
+        Else
+            ' SearchText is greater than the last key, add last key if it matches
+            If UtilStringStartsWith(allKeys(mKeyCount - 1), SearchText, CompareMode) Then UtilAddArrayValue retVal, allKeys(mKeyCount - 1)
+        End If
+    End If
+    FindKeysThatStartWith = retVal
+End Function
 ' ======================== END: KEYS, SORTEDKEYS, INTERNALKEYS, ITEMS, INTERNALITEMS ================================================================
 
 
@@ -1245,7 +1283,7 @@ Private Function evaluateIndexOrKey(IndexOrKey)
                 Dim Key, resultKey
                 set resultKey = new FindKeyResult
                 Key = IndexOrKey
-                set resultKey = findKeyIndex(Key)
+                set resultKey = internalFindKeyIndex(Key, mCompareMode)
                 If resultKey.Exact Then
                     'key was found
                     retVal.Index = allKeyItemIndexes(resultKey.Index)
@@ -1284,7 +1322,7 @@ End Function
 ' If key is not found, returns
 ' 1) [-1] if searched key is less than first stored key
 ' 2) [last stored key index + 1] if searched key is greater than last stored key
-Private Function findKeyIndex(Key)
+Private Function internalFindKeyIndex(Key, CompareMode)
     Dim upper, lower, row, counter, retVal, rowBefore
     set retVal = new FindKeyResult
     retVal.Exact = False
@@ -1293,12 +1331,12 @@ Private Function findKeyIndex(Key)
     Else
         lower = 0:  upper = mKeyCount - 1: counter = 0:
         'compare with last key
-        Select Case StrComp(Key, allKeys(upper), mCompareMode) 'compare with last element
+        Select Case StrComp(Key, allKeys(upper), CompareMode) 'compare with last element
             Case 0: retVal.Index = upper: retVal.Exact = True 'equals last key
             Case 1: retVal.Index = upper + 1 'greater than last key
             Case -1
                 'compare with first key
-                Select Case StrComp(Key, allKeys(lower), mCompareMode)
+                Select Case StrComp(Key, allKeys(lower), CompareMode)
                     Case 0: retVal.Index = lower: retVal.Exact = True 'equals first key
                     Case -1: retVal.Index = lower 'less than first key
                     Case 1:
@@ -1306,11 +1344,11 @@ Private Function findKeyIndex(Key)
                         row = (upper - lower) \ 2
                         Do
                             counter = counter + 1
-                            Select Case StrComp(Key, allKeys(row), mCompareMode)
+                            Select Case StrComp(Key, allKeys(row), CompareMode)
                                 Case 0:
-                                    ' ensure that it snaps to first key that matches by going back until key before does not match
+                                    ' make it snap to row before first key that matches by going back until key before does not match
                                     rowBefore = row - 1
-                                    Do While rowBefore > -1 And StrComp(Key, allKeys(rowBefore), mCompareMode) = 0
+                                    Do While rowBefore > -1 And StrComp(Key, allKeys(rowBefore), CompareMode) = 0
                                         row = rowBefore: rowBefore = row - 1
                                     Loop
                                     retVal.Index = row: retVal.Exact = True
@@ -1318,11 +1356,11 @@ Private Function findKeyIndex(Key)
                                 Case -1: retVal.Index = row: upper = row: row = lower + ((upper - lower) \ 2)
                             End Select
                         Loop While ((upper - lower) > 1) And (retVal.Exact = False) And counter < 7000
-                        If counter = 7000 Then WscripT.echo "!!!!!! Bug found in DictCollection: Endless loop at findKeyIndex(""" & Key & """)!!!!!!!"
+                        If counter = 7000 Then WscripT.echo "!!!!!! Bug found in DictCollection: Endless loop at internalFindKeyIndex(""" & Key & """)!!!!!!!"
                 End Select
         End Select
     End If
-    set findKeyIndex = retVal
+    set internalFindKeyIndex = retVal
 End Function
 
 ' performs key sorting and removes duplicates can exist when adding items and keys while LazySorting=True
@@ -1686,7 +1724,7 @@ Public Function GetOrSetDictCollection(IndexOrKey)
         If mItemCount < 1 Then
             action = 2 ' not found/add
         Else
-            If mKeyCount > 1 And mLazySorting And (Not mKeysSorted) Then sortKeysAndRemoveDuplicates: mKeysSorted = True
+            If mKeyCount > 1 And mLazySorting And (Not mKeysAresortedAndUnique) Then sortKeysAndRemoveDuplicates: mKeysAresortedAndUnique = True
             set result = evaluateIndexOrKey(IndexOrKey)
             If result.Index < 0 Or result.Index > (mItemCount - 1) Then
                 action = 2 ' not found/add
@@ -1714,6 +1752,26 @@ End Function
 
 
 ' ======================== START: PUBLIC HELPER FUNCTIONS =========================================================================================
+
+' UNTESTED
+' returns True if Text starts with SearchText
+' returns False if Text does not start with SearchText or if SearchText is Empty/ZeroLengthString
+Public Function UtilStringStartsWith(Text, SearchText, CompareMode)
+    Dim textLength, searchTextLength
+    searchTextLength = Len(SearchText)
+    If searchTextLength = 0 Then
+        UtilStringStartsWith = False
+    Else
+        textLength = Len(Text)
+        If textLength >= searchTextLength Then
+            ' Mid() is faster than Left() because it is just a pointer
+            UtilStringStartsWith = StrComp(Mid(Text, 1, searchTextLength), SearchText, CompareMode) = 0
+        Else
+            UtilStringStartsWith = False
+        End If
+    End If
+End Function
+
 ' Sorts a one-dimensional VBA array from smallest to largest using a very fast quicksort algorithm
 ' source: https://wellsr.com/vba/2018/excel/vba-quicksort-macro-to-sort-arrays-fast/
 Public Sub UtilSortArray(arr, ArrayLowerBound, ArrayUpperBound)
@@ -1751,11 +1809,16 @@ Public Sub UtilShuffleArray(arr)
 End Sub
 
 ' adds a value to an array
-Public Sub UtilAddArrayValue(arr, val)
-    ' initialize array if arr is not an array
-    If InStr(TypeName(arr), "()") < 1 Then arr = Array() Else ReDim Preserve arr(UBound(arr) + 1)
-    ' set object reference or value
-    If IsObject(val) Then Set arr(UBound(arr)) = val Else arr(UBound(arr)) = val
+Public Sub UtilAddArrayValue(Arr, Val)
+    If InStr(TypeName(Arr), "()") < 1 Then
+        ' if arr is not array, initialize array with val as value
+        Arr = Array(Val)
+    Else
+        ' increment array size by 1
+        ReDim Preserve Arr(UBound(Arr) + 1)
+        ' set object reference or value
+        If IsObject(Val) Then Set Arr(UBound(Arr)) = Val Else Arr(UBound(Arr)) = Val
+    End If
 End Sub
 
 ' removes all occurrences of a value or object reference from an array
@@ -2339,10 +2402,25 @@ currentTest = "[CK-2] Changing keys with lazy sorting": Set dc1 = New DictCollec
         ' item3 will get "keyA" and item1 will be dropped, still existing after that: "keyD"="item3
         dc1.Key("keyD") = "keyA": key1 = "keyA": val1 = "item3": If dc1.item(key1) <> val1 Or dc1.Exists("keyD") Or (dc1.Count <> 1) Or (dc1.KeyCount <> 1) Then UtilAddArrayValue errors, ("-> " & currentTest & " item1 should not exist after assigning its key to item1")
         ' item3 key will be set to none, still existing after that: item3 without key
-        dc1.Key("keyA") = "": If dc1.item(0) <> "item3" Or (dc1.KeyCount <> 0) Then UtilAddArrayValue errors, ("-> " & currentTest & ": all keys must be removed after dropping all keys by setting them")
-    
-    
+        dc1.Key("keyA") = "": If dc1.item(0) <> "item3" Or (dc1.KeyCount <> 0) Then UtilAddArrayValue errors, ("-> " & currentTest & ": all keys must be removed after dropping all keys by setting them")    
     Next
+
+currentTest = "[FKTSW-1] Find keys that start with string": Set dc1 = New DictCollection: dc1.LazySorting = True
+    dc1.Add "apple1", 1 : dc1.Add "Apple2", 2 : dc1.Add "orange1", 3 : dc1.Add "orange2", 4
+    dim tempArray
+    tempArray = dc1.FindKeysThatStartWith("apple",0)
+    if UBound(tempArray) <> 0 Then UtilAddArrayValue errors, ("-> " & currentTest & ": case sensitive search should find 1 apple but found " & UBound(tempArray) + 1 & " apples")
+    tempArray = dc1.FindKeysThatStartWith("orange",0)
+    if UBound(tempArray) <> 1 Then UtilAddArrayValue errors, ("-> " & currentTest & ": case sensitive search should find 2 oranges" & UBound(tempArray) + 1 & " oranges")
+    tempArray = dc1.FindKeysThatStartWith("nonexisting",0)
+    if UBound(tempArray) <> -1 Then UtilAddArrayValue errors, ("-> " & currentTest & ": case sensitive search for nonexsisting keys should return empty Array but returned array with UBound=" & UBound(tempArray) )
+    tempArray = dc1.FindKeysThatStartWith("apple",1)
+    if UBound(tempArray) <> 1 Then UtilAddArrayValue errors, ("-> " & currentTest & ": case insensitive search should find 2 apples but found " & UBound(tempArray) + 1 & " apples")
+    tempArray = dc1.FindKeysThatStartWith("orange",1)
+    if UBound(tempArray) <> 1 Then UtilAddArrayValue errors, ("-> " & currentTest & ": case insensitive search should find 2 oranges" & UBound(tempArray) + 1 & " oranges")
+    tempArray = dc1.FindKeysThatStartWith("nonexisting",1)
+    if UBound(tempArray) <> -1 Then UtilAddArrayValue errors, ("-> " & currentTest & ": case insensitive search for nonexsisting keys should return empty Array but returned array with UBound=" & UBound(tempArray) )
+
     testBasicFunctionality = errors
 End Function
 ' ======================== END: FUNCTIONALITY TESTS =================================================================================================
@@ -3001,6 +3079,7 @@ End Class
 ' - Currency Datatype maximum value is 922337203685477.5 instead of 922337203685477.5807 in VBA
 ' - Decimal data type is not supported, CDec() throws error
 ' - Arrays have to be declared like 'Dim MyArr()' or initialized using a = Array() before typical array operations ban be performed
+' - Arrays cannot be sized using the To keyword: 'Dim Arr(first To last)' does not work
 ' - CVErr() cannot be used as in VBA, throws error
 ' - IsMissing() does not exist, has to be implemented as (VarType(p) = vbError)
 ' - iif(cond,truepart,falsepart) does not exist, has to implemented as if ... then ... else
