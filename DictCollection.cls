@@ -2013,7 +2013,6 @@ ExitFunction:
     FindKeysThatStartWith = retVal
 End Function
 
-' UNTESTED
 ' adds key/value pairs from a two-dimensional or nested array, chainable
 Public Function AddPairs(Arr As Variant, Optional KeyIsFirstColumn = True) As DictCollection
     Dim i As Long, KeyIndex As Long, valIndex As Long, dimensions As Integer
