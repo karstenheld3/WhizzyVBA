@@ -8,8 +8,8 @@ Attribute VB_Creatable = False
 Attribute VB_PredeclaredId = True
 Attribute VB_Exposed = True
 ' ======================== START: DOCUMENTATION =====================================================================================================
-' DictCollection 038 (VBA Version) - A mix between Dictionary and Collection that can emulate both
-' Karsten Held 2016-2018, karstenheld3@gmail.com, MIT License
+' DictCollection 039 (VBA Version) - A mix between Dictionary and Collection that can emulate both
+' Karsten Held 2016-2019, karstenheld3@gmail.com, MIT License
 '
 ' ----------- HOW TO USE ----------------------------------------------------------------------------------------------------------------------------
 ' Create an empty collection:                       Set dc = New DictCollection
@@ -82,10 +82,15 @@ Attribute VB_Exposed = True
 '
 ' ----------- OTHER DICTCOLLECTION FUNCTIONS ----------------------------------------------------------------------------------------------------------
 ' Collection-compatible Add function                dc.Add2(Item, [Key], [Before], [After]) As DictCollection
+' Add key-value pairs from 2-dimensional            dc.AddPairs(Arr, [KeyIsFirstColumn]) As DictCollection
+'   or nested array (doesn't add empty keys)          Example: dc.AddPairs Array(Array("a",1), Array("b",2))
 ' Copy all items and keys                           dc.CopyItems([SourceCollection], [TargetCollection], [TargetIndex]) As DictCollection
 ' Copy settings from on DC to another DC            dc.CopyAllSettingsExceptCollectionType(FromCollection, ToCollection)
 ' Copy subcollection chaining settings              dc.CopySubCollectionChainingSettings(FromCollection, ToCollection)
 ' Clone entire DictCollection tree                  dc.Clone([TargetCollection]) as DictCollection
+' Create new DC by dropping specified keys          dc.DropKeysToNew(KeyArr, [AllowWildcards], [CompareMode]) As DictCollection
+' Create new DC by keeping specified keys           dc.KeepKeysToNew(KeyArr, [AllowWildcards], [CompareMode]) As DictCollection
+' Create new DC by matching specified keys          dc.MatchKeysToNew(KeyArr, [NotFoundvalue], [CompareMode]) As DictCollection
 ' Set item by index or key (chainable function)     dc.SetItem(IndexOrKey, Value) As DictCollection
 ' Increment stored number by 1 or Amount            dc.Increment(IndexOrKey, [Amount]) As Variant
 ' Check if item has key                             dc.ItemHasKey(ItemIndex) As Boolean
@@ -125,6 +130,7 @@ Attribute VB_Exposed = True
 ' Check if text has only number chars               UNTESTED dc.UtilStringConsistsOfNumericAsciiChars(Text) As Boolean
 ' Build concatenated string by repeating a text     UNTESTED dc.UtilStringRepeat(Text, NumberOfTimes) As String
 ' Check if text starts with another text            UNTESTED dc.UtilStringStartsWith(Text, SearchText, [CompareMode]) As Boolean
+' Check if text matches splitted wildcard ("*.*")   dc.UtilStringMatchesWildcard(TextToCheck, WildcardSplit, [CompareMode]) As Boolean
 '
 ' ----------- INFORMATION ---------------------------------------------------------------------------------------------------------------------------
 ' - stored items can be Empty, Nothing, Null, Error, Array, Object, Integer, Long, Single, Double, Currency, Decimal, Date, Byte
@@ -171,7 +177,14 @@ Attribute VB_Exposed = True
 ' - Existing keys of the form "_N_C" or "_N" will not be affected by .Flatten but .Unflatten will incorrectly remove these keys if N > dc.Count
 ' - When running .SelfTest and other test functions in Excel VBA Immediate Window, saving the file just before running the tests helps avoid crashes
 '
+' ----------- KNOWN DESIGN PROBLEMS -----------------------------------------------------------------------------------------------------------------
+' - Some functions are chainable, others like .Clone are not. This is confusing.
+' - Some functions like .Filter*ToNewDC() return new DictCollections, others modify a TargetCollection. This is inconsistent.
+' - Default Value allows chainability but trade-off with disfunctional VarType() is tricky and difficult to understand.
+' - Emulation of Collection introduces mExternalIndexOffset, making it complicated for private functions to use public index based functions
+'
 ' ----------- TODOS ---------------------------------------------------------------------------------------------------------------------------------
+' - make .Flatten and .Unflatten chainable
 ' - implement .Swap(IndexA, IndexB) -> swaps two items
 ' - implement .AddKey(Key, Optional Index) -> adds a key; if the item at index already has a key, another key is being added for that item
 ' - implement .CollectionType = 6 -> keys only (will affect copy/clone)
@@ -1067,7 +1080,7 @@ Private Sub internalAddItem(Optional Item As Variant = Empty, Optional Key As St
     End If
 End Sub
 
-' inserts key at given index after copying all existing keys >= keyIndex one up
+' inserts key at given index after copying all existing keys >= KeyIndex one up
 Private Function insertKey(Key As String, KeyIndex As Long, ItemIndex As Long)
     increaseKeyArray
     If KeyIndex < (mKeyCount - 1) Then copyKeysUp KeyIndex, mKeyCount - 2, 1, True
@@ -1999,6 +2012,198 @@ Public Function FindKeysThatStartWith(SearchText As String, Optional CompareMode
 ExitFunction:
     FindKeysThatStartWith = retVal
 End Function
+
+' UNTESTED
+' adds key/value pairs from a two-dimensional or nested array, chainable
+Public Function AddPairs(Arr As Variant, Optional KeyIsFirstColumn = True) As DictCollection
+    Dim i As Long, KeyIndex As Long, valIndex As Long, dimensions As Integer
+    Set AddPairs = Me
+    dimensions = UtilArrayDimensions(Arr)
+    If dimensions = 1 Then
+        ' check if array is nested array and if yes, set dimensions to -1
+        If UBound(Arr) > -1 Then
+            If IsArray(Arr(0)) Then dimensions = -1
+        End If
+    End If
+    Select Case dimensions
+        Case 0: ' Unitialized Array
+            If mThrowErrors Then Err.Raise 13, "DictCollection", "Can't add from uninitialized array. Must be 2-dimensional or nested array."
+            Exit Function
+        Case 1: ' One-Dimensional Array
+            If mThrowErrors Then Err.Raise 13, "DictCollection", "Can't add from one-dimensional array. Must be 2-dimensional or nested array."
+            Exit Function
+        Case -1:
+            ' One-Dimensional Nested Array
+            For i = LBound(Arr) To UBound(Arr)
+                If KeyIsFirstColumn Then
+                    ' key is first index and value is second
+                    KeyIndex = LBound(Arr(i)): valIndex = KeyIndex + 1
+                Else
+                    ' the other way round
+                    valIndex = LBound(Arr(i)): KeyIndex = valIndex + 1
+                End If
+                ' do not add empty keys unless we are emulating Scripting.Dictionary
+                If UBound(Arr(i)) > 0 Then
+                    If Not IsEmpty(Arr(i)(KeyIndex)) Or mEmulateScriptingDictionary Then
+                        Me.Add Arr(i)(KeyIndex), Arr(i)(valIndex)
+                    Else
+                        If mThrowErrors Then Err.Raise 13, "DictCollection", "Nested arr(" & i & ") contains empty key!"
+                        ' otherwise ignore and continue
+                    End If
+                Else
+                    If mThrowErrors Then Err.Raise 9, "DictCollection", "Nested arr(" & i & ") must have 2 items but contains only 1."
+                    ' otherwise ignore and continue
+                End If
+            Next
+        Case 2:
+            ' Two-Dimensional Array
+            If UBound(Arr, 2) > 0 Then
+                If KeyIsFirstColumn Then
+                    ' key is first index and value is second
+                    KeyIndex = LBound(Arr, 2): valIndex = KeyIndex + 1
+                Else
+                    ' the other way round
+                    valIndex = LBound(Arr, 2): KeyIndex = valIndex + 1
+                End If
+                For i = LBound(Arr, 1) To UBound(Arr, 1)
+                    ' do not add empty keys unless we are emulating Scripting.Dictionary
+                    If Not IsEmpty(Arr(i, KeyIndex)) Or mEmulateScriptingDictionary Then
+                        Me.Add Arr(i, KeyIndex), Arr(i, valIndex)
+                    Else
+                        If mThrowErrors Then Err.Raise 13, "DictCollection", "2-dimensional arr(" & i & ") contains empty key!"
+                        ' otherwise ignore and continue
+                    End If
+                Next
+            Else
+                If mThrowErrors Then Err.Raise 9, "DictCollection", "Second dimension of 2-dimensional array must be > 0!"
+                Exit Function
+            End If
+    End Select
+End Function
+
+' Creates a new DictCollection from an existing one by dropping all keys that match any key stored in KeyArr.
+' Does not recoursivey traverse the DictCollection. Use .Flatten() -> .Filter() -> .Unflatten() if you want to drop SubCollection keys.
+' Ignores non-string and empty keys (not 100% compatible with .EmulateDictionary=True).
+' If you have only one string, use VBA.Array(myString) to create the KeyArr
+' AllowWildcards=False: only exact matches
+' AllowWildcards=True:  inexact matches using the asterisk '*' character.
+'                       Examples: 1) '*test*' -> drops keys containing 'test' 2) '*abc' -> drops keys ending with 'abc' 3) '_*' -> drops keys starting with '_'
+' CompareMode:          toggles between case sensitve (vbBinaryCompare, default) key comparison and case insensitive (vbTextCompare)
+' Example usage:        Dim dc As New DictCollection: dc.AddPairs Array(Array("a", 1), Array("b", 2), Array("bx", 3))
+'                       Dim dc2 As DictCollection: Set dc2 = dc.DropKeysToNew(Array("*b*"), True)
+'                       '-> will create new DC and drop any keys that contain, start or end with "b" -> drops item 2 and 3
+Public Function DropKeysToNew(KeyArr As Variant, Optional AllowWildcards As Boolean = False, Optional CompareMode As VbCompareMethod = vbBinaryCompare) As DictCollection
+    Set DropKeysToNew = internalFilterKeysToNew(KeyArr, AllowWildcards, CompareMode, 1, mNonExistingValue)
+End Function
+
+' Creates a new DictCollection from an existing one by keeping all keys that match any key stored in KeyArr.
+' Does not recoursivey traverse the DictCollection. Use .Flatten() -> .Filter() -> .Unflatten() if you want to keep SubCollection keys.
+' Ignores non-string and empty keys (not 100% compatible with .EmulateDictionary=True).
+' AllowWildCards=False: only exact matches
+' AllowWildCards=True:  inexact matches using the asterisk '*' character.
+'                       Examples: 1) '*test*' -> keeps keys containing 'test' 2) '*abc' -> keeps keys ending with 'abc' 3) '_*' -> keeps keys starting with '_'
+' CompareMode:          toggles between case sensitve (vbBinaryCompare, default) key comparison and case insensitive (vbTextCompare)
+' Example usage:        Dim dc As New DictCollection: dc.AddPairs Array(Array("a", 1), Array("b", 2), Array("bx", 3))
+'                       Dim dc2 As DictCollection: Set dc2 = dc.KeepKeysToNew(Array("b"))
+'                       '-> will keep any key that matches "b" -> keeps item 2
+'                       Set dc = New DictCollection: dc.AddPairs Array(Array("a", 1), Array("b", 2), Array("bx", 3))
+'                       Set dc2 = dc.KeepKeysToNew(Array("*B*"), True, vbTextCompare)
+'                       '-> will keep any item that contains, starts or ends with "B" or "b" -> keeps item 2 and 3
+Public Function KeepKeysToNew(KeyArr As Variant, Optional AllowWildcards As Boolean = False, Optional CompareMode As VbCompareMethod = vbBinaryCompare) As DictCollection
+    Set KeepKeysToNew = internalFilterKeysToNew(KeyArr, AllowWildcards, CompareMode, 2, mNonExistingValue)
+End Function
+
+' Creates a new DictCollection with keys and items that match the keys specified in KeyArr.
+' The items will have the same order as the specified keys in KeyArr. Unmatched keys in KeyArr will be included with NotFoundValue as items.
+' Does not recoursivey traverse the DictCollection. Use .Flatten() -> .Filter() -> .Unflatten() if you want to keep SubCollection keys.
+' Ignores non-string and empty keys (not 100% compatible with .EmulateDictionary=True).
+' CompareMode:          toggles between case sensitve (vbBinaryCompare, default) key comparison and case insensitive (vbTextCompare)
+' Example usage:        Dim dc As New DictCollection: dc.AddPairs Array(Array("a", 1), Array("b", 2), Array("c", 3))
+'                       Dim dc2 As DictCollection: Set dc2 = dc.MatchKeysToNew(Array("a", "b", "x"), Empty)
+'                       '-> will return DC with items 1 and 2 and an Empty item for key "x"
+Public Function MatchKeysToNew(KeyArr As Variant, Optional NotFoundValue As Variant = "[NONEXISTING]", Optional CompareMode As VbCompareMethod = vbBinaryCompare) As DictCollection
+    Set MatchKeysToNew = internalFilterKeysToNew(KeyArr, False, CompareMode, 3, NotFoundValue)
+End Function
+
+' internal filter function that returns a new DictCollection according to the specified filter function
+' action: 1 = drop, 2 = keep, 3 = match
+Private Function internalFilterKeysToNew(KeyArr As Variant, AllowWildcards As Boolean, CompareMode As VbCompareMethod, action As Integer, NotFoundValue As Variant) As DictCollection
+    Dim retVal As DictCollection, lower As Long, upper As Long, keyArr2 As Variant, tempDC As DictCollection
+    Dim i As Long, j As Long, match As Boolean, currentKey As String, wildcardSplits As Variant
+    Set retVal = New DictCollection
+    DictCollection.CopyAllSettingsExceptCollectionType Me, retVal
+    If Not IsArray(KeyArr) Then
+        If mThrowErrors Then If mThrowErrors Then Err.Raise 13, "KeyArr is not an array"
+    Else
+        ' build cleaned key array
+        keyArr2 = Array()
+        lower = LBound(KeyArr): upper = UBound(KeyArr)
+        For i = lower To upper
+            If TypeName(KeyArr(i)) = "String" Then
+                If Len(KeyArr(i)) > 0 Then UtilAddArrayValue keyArr2, KeyArr(i)
+            End If
+        Next
+        Select Case action
+            ' drop and keep
+            Case 1, 2:
+                If AllowWildcards And UBound(keyArr2) > -1 Then
+                    ' produce splits
+                    ReDim wildcardSplits(0 To UBound(keyArr2))
+                    For j = 0 To UBound(keyArr2)
+                        wildcardSplits(j) = Split(keyArr2(j), "*")
+                    Next
+                End If
+                For i = 0 To mItemCount - 1
+                    ' process only items that have key (drop others)
+                    If allItemKeyIndexes(i) > -1 Then
+                        currentKey = allKeys(allItemKeyIndexes(i))
+                        match = False
+                        For j = 0 To UBound(keyArr2)
+                            If AllowWildcards Then
+                                match = UtilStringMatchesWildcard(currentKey, wildcardSplits(j), CompareMode)
+                            Else
+                                match = (StrComp(currentKey, keyArr2(j), CompareMode) = 0)
+                            End If
+                            If match Then Exit For ' exit on first match
+                        Next
+                        If (action = 1 And Not match) Or (action = 2 And match) Then
+                            If TypeName(allItems(i)) = "DictCollection" Then
+                                ' copy key and clone DictCollection item
+                                Set tempDC = allItems(i).Clone
+                                retVal.Add currentKey, tempDC
+                            Else
+                                ' copy item and key
+                                retVal.Add currentKey, allItems(i)
+                            End If
+                        End If
+                    End If
+                Next
+            ' match keys
+            Case 3:
+                Dim fkr As FindKeyResult
+                ' run over all keys to match
+                For i = 0 To UBound(keyArr2)
+                    currentKey = keyArr2(i)
+                    ' try to find key
+                    fkr = internalFindKeyIndex(currentKey, CompareMode)
+                    If fkr.Exact Then
+                        ' key found, add item (clone if DictCollection)
+                        If TypeName(allItems(allKeyItemIndexes(fkr.Index))) = "DictCollection" Then
+                            Set tempDC = allItems(allKeyItemIndexes(fkr.Index)).Clone
+                            retVal.Add currentKey, tempDC
+                        Else
+                            retVal.Add currentKey, allItems(allKeyItemIndexes(fkr.Index))
+                        End If
+                    Else
+                        ' key not found, add notFoundValue
+                        retVal.Add currentKey, NotFoundValue
+                    End If
+                Next
+        End Select
+    End If
+    Set internalFilterKeysToNew = retVal
+End Function
+
 
 ' can be enabled for testing purposes
 ' Friend Property Get InternalItems() As Variant(): InternalItems = allItems: End Property
@@ -3115,6 +3320,52 @@ Public Function UtilAssignFromTo(FromVariable As Variant, ToVariable As Variant)
 End Function
 
 ' UNTESTED
+' takes an array of strings that are split by an asterisk character and returns True if it matches TextToCheck
+' examples: StringMatchesWildCard("my_pony_is_green", Array("","pony","green"), vbCompareText) -> True (starts with or contains 'pony' and ends with 'green')
+'           StringMatchesWildCard("my_pony_is_green", Array("my","blue",""), vbCompareText) -> False (starts with 'my' but does not contain or end with 'blue')
+Public Function UtilStringMatchesWildcard(TextToCheck As String, WildcardSplit As Variant, Optional CompareMode As VbCompareMethod = vbBinaryCompare) As Boolean
+    Dim textToFind As String, match As Boolean, i As Long, nextStartPos As Long, foundPos As Long
+    If Not IsArray(WildcardSplit) Then
+        match = False
+    ElseIf UBound(WildcardSplit) = -1 Then
+        match = False
+    ElseIf Len(TextToCheck) = 0 Then
+        match = False
+    ElseIf UBound(WildcardSplit) = 0 Then
+        ' no asterisks used, text has to match exactly
+        match = (StrComp(TextToCheck, WildcardSplit(0), CompareMode) = 0)
+    Else
+        match = True: nextStartPos = 1
+        For i = 0 To UBound(WildcardSplit)
+            textToFind = WildcardSplit(i)
+            If Len(textToFind) > 0 Then
+                If Len(TextToCheck) < ((nextStartPos - 1) + Len(textToFind)) Then
+                    match = False: Exit For  ' filename not long enough for comparison
+                Else
+                    Select Case i
+                        Case 0:
+                            ' string has to start with textToFind
+                            If StrComp(Left(TextToCheck, Len(textToFind)), textToFind, CompareMode) <> 0 Then match = False: Exit For
+                            nextStartPos = Len(textToFind) + 1
+                        Case UBound(WildcardSplit):
+                            ' string has to end with textToFind
+                            If StrComp(Right(TextToCheck, Len(textToFind)), textToFind, CompareMode) <> 0 Then match = False: Exit For
+                        Case Else:
+                            foundPos = InStr(nextStartPos, TextToCheck, textToFind, CompareMode) ' 0 = not found
+                            If foundPos >= nextStartPos Then
+                                nextStartPos = foundPos + Len(textToFind)
+                            Else
+                                match = False: Exit For
+                            End If
+                    End Select
+                End If
+            End If
+        Next
+    End If
+    UtilStringMatchesWildcard = match
+End Function
+
+' UNTESTED
 ' returns True if Text starts with SearchText
 ' returns False if Text does not start with SearchText or if SearchText is Empty/ZeroLengthString
 Public Function UtilStringStartsWith(Text As String, SearchText As String, Optional CompareMode As VbCompareMethod = vbBinaryCompare) As Boolean
@@ -3264,7 +3515,7 @@ End Sub
 ' if array is uninitialized or not an array, it will be set to empty array
 ' will crash if array contains objects and if it contains non-string-convertable types where the sort value is expected
 ' Original Source: https://wellsr.com/vba/2018/excel/vba-quicksort-macro-to-sort-arrays-fast/
-Public Sub UtilSortStringArray(Arr As Variant, FromIndex As Long, ToIndex As Long, CompareMode As CompareMethod)
+Public Sub UtilSortStringArray(Arr As Variant, FromIndex As Long, ToIndex As Long, CompareMode As VbCompareMethod)
     Dim pivotValue As Variant, swappedValue As Variant, lower As Long, upper As Long, dimensions As Integer, i As Long, colUpper As Long
     dimensions = UtilArrayDimensions(Arr)
     If dimensions = 1 Then
@@ -3513,7 +3764,6 @@ End Sub
 '            Example: Change ("-> " & currentTest) to ("-> " & currentTest & ": a special condition must be met")
 '            Sometimes these string operations cause the disappearance of nondeterministic results (observed when testing for correctness of thrown errors)
 Public Function SelfTest(Optional DebugPrint As Boolean = True)
-    
     Dim retVal As Boolean: retVal = True
     retVal = retVal And UBound(TestFunctionality(DebugPrint)) > -1
     retVal = retVal And UBound(TestCompatibility(DebugPrint)) > -1
@@ -3554,6 +3804,7 @@ Public Function TestFunctionality(Optional DebugPrint As Boolean = True) As Vari
     combineAndPrintTestErrors "Basic Functionality", testBasicFunctionality(False), allErrors, DebugPrint
     combineAndPrintTestErrors "Advanced Item And Key Access", testAdvancedItemAndKeyAccess(False), allErrors, DebugPrint
     combineAndPrintTestErrors "Advanced Functionality", testAdvancedFunctionality(False), allErrors, DebugPrint
+    combineAndPrintTestErrors "Utility Functionality", testUtilFunctionality(False), allErrors, DebugPrint
     combineAndPrintTestErrors "Bugfixes and Workarounds", testFixes(False), allErrors, DebugPrint
     
     If DebugPrint Then Debug.Print "----------- End DictCollection Functionality Test ------------------------------"
@@ -4019,6 +4270,73 @@ Private Function testAdvancedItemAndKeyAccess(Optional DebugPrint As Boolean = F
     Dim errors As Variant, dc1 As DictCollection, dc2 As DictCollection, currentTest As String, i As Long, j As Long, Items As Variant, Keys As Variant, testdata As Variant, Val As Variant
     Dim intItems() As Variant, intKeys() As String
     errors = Array()
+    
+currentTest = "[AKVPFA-1] AddPairs must add nothing from incompatible arrays"
+    Set dc1 = New DictCollection
+    dc1.AddPairs Array()
+    If dc1.Count <> 0 Then logError DebugPrint, errors, ("-> " & currentTest & ": DictCollection must be empty when adding empty array")
+    dc1.RemoveAll: dc1.AddPairs Array(Array())
+    If dc1.Count <> 0 Then logError DebugPrint, errors, ("-> " & currentTest & ": DictCollection must be empty when adding empty nested array")
+    dc1.RemoveAll: dc1.AddPairs Array(Array("x"))
+    If dc1.Count <> 0 Then logError DebugPrint, errors, ("-> " & currentTest & ": DictCollection must be empty when adding nested array with wrong dimensions")
+    ReDim testdata(0, 0)
+    dc1.RemoveAll: dc1.AddPairs testdata
+    If dc1.Count <> 0 Then logError DebugPrint, errors, ("-> " & currentTest & ": DictCollection must be empty when adding 2dim. array with wrong dimensions (1)")
+    ReDim testdata(1, 0)
+    dc1.RemoveAll: dc1.AddPairs testdata
+    If dc1.Count <> 0 Then logError DebugPrint, errors, ("-> " & currentTest & ": DictCollection must be empty when adding 2dim. array with wrong dimensions (2)")
+    ReDim testdata(0, 1)
+    dc1.RemoveAll: dc1.AddPairs testdata
+    If dc1.Count <> 0 Then logError DebugPrint, errors, ("-> " & currentTest & ": DictCollection must be empty when adding 2dim. array with empty keys")
+currentTest = "[AKVPFA-2A] AddPairs must add from 2-dimensional array to empty DictCollection"
+    dc1.RemoveAll
+    ReDim testdata(1, 1): testdata(0, 0) = "a": testdata(0, 1) = 1: testdata(1, 0) = "b": testdata(1, 1) = 2
+    dc1.AddPairs testdata
+    If dc1.Count <> 2 Or dc1.KeyCount <> 2 Then logError DebugPrint, errors, ("-> " & currentTest & ": DictCollection must have .Count=2 and .KeyCount=2")
+    If dc1.KeyOfItemAt(0) <> "a" Or dc1.KeyOfItemAt(1) <> "b" Then logError DebugPrint, errors, ("-> " & currentTest & ": DictCollection has incorrect keys")
+    If dc1.ItemAt(0) <> 1 Or dc1.ItemAt(1) <> 2 Then logError DebugPrint, errors, ("-> " & currentTest & ": DictCollection has incorrect items")
+currentTest = "[AKVPFA-2B] AddPairs must add from 2-dimensional array to filled DictCollection"
+    dc1.RemoveAll: dc1.Add "a", 1 ' add existing item
+    ReDim testdata(1, 1): testdata(0, 0) = "b": testdata(0, 1) = 2: testdata(1, 0) = "c": testdata(1, 1) = 3
+    dc1.AddPairs testdata
+    If dc1.Count <> 3 Or dc1.KeyCount <> 3 Then logError DebugPrint, errors, ("-> " & currentTest & ": DictCollection must have .Count=3 and .KeyCount=3")
+    If dc1.KeyOfItemAt(0) <> "a" Or dc1.KeyOfItemAt(1) <> "b" Or dc1.KeyOfItemAt(2) <> "c" Then logError DebugPrint, errors, ("-> " & currentTest & ": DictCollection has incorrect keys")
+    If dc1.ItemAt(0) <> 1 Or dc1.ItemAt(1) <> 2 Or dc1.ItemAt(2) <> 3 Then logError DebugPrint, errors, ("-> " & currentTest & ": DictCollection has incorrect items")
+currentTest = "[AKVPFA-2C] AddPairs must add from 2-dimensional array in value-key-order to filled DictCollection"
+    dc1.RemoveAll: dc1.Add "a", 1 ' add existing item
+    ReDim testdata(1, 1): testdata(0, 0) = 2: testdata(0, 1) = "b": testdata(1, 0) = 3: testdata(1, 1) = "c"
+    dc1.AddPairs testdata, False
+    If dc1.Count <> 3 Or dc1.KeyCount <> 3 Then logError DebugPrint, errors, ("-> " & currentTest & ": DictCollection must have .Count=3 and .KeyCount=3")
+    If dc1.KeyOfItemAt(0) <> "a" Or dc1.KeyOfItemAt(1) <> "b" Or dc1.KeyOfItemAt(2) <> "c" Then logError DebugPrint, errors, ("-> " & currentTest & ": DictCollection has incorrect keys")
+    If dc1.ItemAt(0) <> 1 Or dc1.ItemAt(1) <> 2 Or dc1.ItemAt(2) <> 3 Then logError DebugPrint, errors, ("-> " & currentTest & ": DictCollection has incorrect items")
+currentTest = "[AKVPFA-3A] AddPairs must add from nested array to empty DictCollection"
+    dc1.RemoveAll
+    dc1.AddPairs Array(Array("a", 1), Array("b", 2))
+    If dc1.Count <> 2 Or dc1.KeyCount <> 2 Then logError DebugPrint, errors, ("-> " & currentTest & ": DictCollection must have .Count=2 and .KeyCount=2")
+    If dc1.KeyOfItemAt(0) <> "a" Or dc1.KeyOfItemAt(1) <> "b" Then logError DebugPrint, errors, ("-> " & currentTest & ": DictCollection has incorrect keys")
+    If dc1.ItemAt(0) <> 1 Or dc1.ItemAt(1) <> 2 Then logError DebugPrint, errors, ("-> " & currentTest & ": DictCollection has incorrect items")
+currentTest = "[AKVPFA-3B] AddPairs must add from nested array to filled DictCollection"
+    dc1.RemoveAll: dc1.Add "a", 1 ' add existing item
+    dc1.AddPairs Array(Array("b", 2), Array("c", 3))
+    If dc1.Count <> 3 Or dc1.KeyCount <> 3 Then logError DebugPrint, errors, ("-> " & currentTest & ": DictCollection must have .Count=3 and .KeyCount=3")
+    If dc1.KeyOfItemAt(0) <> "a" Or dc1.KeyOfItemAt(1) <> "b" Or dc1.KeyOfItemAt(2) <> "c" Then logError DebugPrint, errors, ("-> " & currentTest & ": DictCollection has incorrect keys")
+    If dc1.ItemAt(0) <> 1 Or dc1.ItemAt(1) <> 2 Or dc1.ItemAt(2) <> 3 Then logError DebugPrint, errors, ("-> " & currentTest & ": DictCollection has incorrect items")
+currentTest = "[AKVPFA-3C] AddPairs must add from nested array in value-key-order to filled DictCollection"
+    dc1.RemoveAll: dc1.Add "a", 1 ' add existing item
+    dc1.AddPairs Array(Array(2, "b"), Array(3, "c")), False
+    If dc1.Count <> 3 Or dc1.KeyCount <> 3 Then logError DebugPrint, errors, ("-> " & currentTest & ": DictCollection must have .Count=3 and .KeyCount=3")
+    If dc1.KeyOfItemAt(0) <> "a" Or dc1.KeyOfItemAt(1) <> "b" Or dc1.KeyOfItemAt(2) <> "c" Then logError DebugPrint, errors, ("-> " & currentTest & ": DictCollection has incorrect keys")
+    If dc1.ItemAt(0) <> 1 Or dc1.ItemAt(1) <> 2 Or dc1.ItemAt(2) <> 3 Then logError DebugPrint, errors, ("-> " & currentTest & ": DictCollection has incorrect items")
+currentTest = "[AKVPFA-4] AddPairs must throw correct errors if array has inorrect dimensions"
+    Set dc1 = New DictCollection: dc1.ThrowErrors = True
+    On Error Resume Next
+    Err.Clear: dc1.AddPairs Array(): If Err.Number <> 13 Then logError DebugPrint, errors, ("-> " & currentTest & ": DictCollection must throw Error 13 when adding empty array")
+    Err.Clear: dc1.RemoveAll: dc1.AddPairs Array(Array()): If Err.Number = 13 Then logError DebugPrint, errors, ("-> " & currentTest & ": DictCollection must throw Error 13 when adding empty nested array")
+    Err.Clear: dc1.RemoveAll: dc1.AddPairs Array(Array("x")): If Err.Number <> 9 Then logError DebugPrint, errors, ("-> " & currentTest & ": DictCollection must throw Error 9 when adding nested array with wrong dimensions")
+    Err.Clear: ReDim testdata(0, 0): dc1.RemoveAll: dc1.AddPairs testdata: If Err.Number <> 9 Then logError DebugPrint, errors, ("-> " & currentTest & ": DictCollection must throw Error 9 when adding 2dim. array with wrong dimensions (1)")
+    Err.Clear: ReDim testdata(1, 0): dc1.RemoveAll: dc1.AddPairs testdata: If Err.Number <> 9 Then logError DebugPrint, errors, ("-> " & currentTest & ": DictCollection must throw Error 9 when adding 2dim. array with wrong dimensions (2)")
+    Err.Clear: ReDim testdata(0, 1): dc1.RemoveAll: dc1.AddPairs testdata: If Err.Number <> 13 Then logError DebugPrint, errors, ("-> " & currentTest & ": DictCollection must throw Error 13 when adding 2dim. array with empty keys")
+    On Error GoTo Fail: Err.Clear
     
 currentTest = "[IHC-1] ItemHasKey must return correct values"
     Set dc1 = New DictCollection: dc1.Add , "A": dc1.Add "b", "B"
@@ -4874,6 +5192,235 @@ Private Function testAdvancedFunctionality(Optional DebugPrint As Boolean = Fals
     Dim i As Long, j As Long, Items As Variant, Keys As Variant, testdata As Variant, Val As Variant
     errors = Array()
     
+    
+    For i = 1 To 4
+        Set dc1 = New DictCollection: Set dc2 = New DictCollection
+If i = 1 Then currentTest = "[MATCHKNEW-1A] MatchKeysToNew must copy settings if nothing to drop and empty source DictCollection"
+If i = 2 Then dc1.Add "x", 1: currentTest = "[MATCHKNEW-1B] MatchKeysToNew must copy settings if nothing to drop and filled source DictCollection"
+If i = 3 Then Keys = Array("x"): currentTest = "[MATCHKNEW-1C] MatchKeysToNew must copy settings if empty source DictCollection"
+If i = 4 Then dc1.Add "x", 1: Keys = Array("x"): currentTest = "[MATCHKNEW-1D] MatchKeysToNew must copy settings if filled source DictCollection"
+        dc1.EmulateCollection = True
+        dc1.DefaultValueEnabled = False
+        dc1.EmptyCollectionValue = "empty"
+        dc1.NonExistingValue = #1/1/2000#
+        dc1.LazySorting = False
+        dc1.ZeroBasedIndex = False
+        dc1.CompareMode = vbTextCompare
+        dc1.ThrowErrors = True
+        ' filter
+        Set dc2 = dc1.MatchKeysToNew(Array())
+        ' tests
+        If dc2.EmulateCollection <> True Or dc2.DefaultValueEnabled <> False Or dc2.EmptyCollectionValue <> "empty" Then logError DebugPrint, errors, ("-> " & currentTest)
+        If dc2.NonExistingValue <> #1/1/2000# Or dc2.LazySorting <> False Or dc2.ZeroBasedIndex <> False Then logError DebugPrint, errors, ("-> " & currentTest)
+        If dc2.CompareMode <> vbTextCompare Or dc2.ThrowErrors <> True Then logError DebugPrint, errors, ("-> " & currentTest)
+    Next
+currentTest = "[MATCHKNEW-2] MatchKeysToNew must return empty DictCollection if there is nothing to match"
+    Set dc1 = New DictCollection: Set dc2 = New DictCollection
+    dc1.Add("a", 1).Add("b", 2).Add(, 2.5).Add "c", 3
+    Set dc2 = dc1.MatchKeysToNew(Array())
+    If dc2.Count <> 0 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection must be empty")
+currentTest = "[MATCHKNEW-3A] MatchKeysToNew must find exact matches with case-sensitive matching"
+    Set dc1 = New DictCollection: Set dc2 = New DictCollection
+    dc1.Add("a", 1).Add("b", 2).Add(, 2.5).Add "c", 3
+    Set dc2 = dc1.MatchKeysToNew(Array("a", "B"), "?", vbBinaryCompare)
+    If dc2.Count <> 2 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has icorrect item count")
+    If dc2.KeyOfItemAt(0) <> "a" Or dc2.ItemOf(0) = 1 Or dc2.KeyOfItemAt(1) <> "B" Or dc2.ItemOf(1) = "?" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection contains incorrect keys/items")
+currentTest = "[MATCHKNEW-3B] MatchKeysToNew must find matches with case-insensitive matching"
+    Set dc1 = New DictCollection: Set dc2 = New DictCollection
+    dc1.Add("a", 1).Add("b", 2).Add(, 2.5).Add "c", 3
+    Set dc2 = dc1.MatchKeysToNew(Array("a", "B"), , vbTextCompare)
+    If dc2.Count <> 2 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect item count")
+    If dc2.KeyOfItemAt(0) <> "a" Or dc2.ItemOf(0) = 1 Or dc2.KeyOfItemAt(1) <> "B" Or dc2.ItemOf(1) = 2 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection contains incorrect keys/items")
+currentTest = "[MATCHKNEW-4] MatchKeysToNew must return all keys if nothing was found"
+    Set dc1 = New DictCollection: Set dc2 = New DictCollection
+    dc1.Add("x", 1).Add("_X_", 2).Add("_x", 3).Add "X_", 4
+    Set dc2 = dc1.MatchKeysToNew(Array("a", "b", "c"), -1, vbBinaryCompare)
+    If dc2.Count <> 3 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect item count")
+    If dc2.KeyOfItemAt(0) <> "a" Or dc2.ItemOf(0) = -1 Or dc2.KeyOfItemAt(1) <> "b" Or dc2.ItemOf(1) = -1 Or dc2.KeyOfItemAt(2) <> "c" Or dc2.ItemOf(2) = -1 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection contains incorrect keys/items")
+currentTest = "[MATCHKNEW-5] MatchKeysToNew must clone matching SubCollections"
+    Set dc1 = New DictCollection: Set dc2 = New DictCollection
+    dc1.AddDC("x").Add "a", 1
+    dc1.AddDC("y").Add "b", 2
+    Set dc2 = dc1.MatchKeysToNew(Array("y")) ' match SubCollection 'y'
+    dc1.AsDC("y").RemoveAll ' empty source SubCollection, must not affect cloned SubCollection
+    If dc2.Count <> 1 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect item number")
+    If dc2.AsDC("y").Count <> 1 Or dc2.AsDC("y").KeyOfItemAt(0) <> "b" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect SubCollection")
+currentTest = "[MATCHKNEW-6] MatchKeysToNew must trow correct error if KeyArr is of invalid type"
+    Set dc1 = New DictCollection: Set dc2 = New DictCollection
+    dc1.ThrowErrors = True
+    testdata = Array(CInt(1), CDbl(1#), "text", New DictCollection)
+    On Error Resume Next
+    For i = 0 To UBound(testdata)
+        Err.Clear: Set dc2 = dc1.MatchKeysToNew(testdata(i)): If Err.Number <> 13 Then logError DebugPrint, errors, ("-> " & currentTest & ": KeyArr of Type " & TypeName(testdata(i)) & " must throw Error 13")
+    Next
+    On Error GoTo Fail: Err.Clear
+       
+    For i = 1 To 4
+        Set dc1 = New DictCollection: Set dc2 = New DictCollection
+If i = 1 Then currentTest = "[KEEPKNEW-1A] KeepKeysToNew must copy settings if nothing to drop and empty source DictCollection"
+If i = 2 Then dc1.Add "x", 1: currentTest = "[KEEPKNEW-1B] KeepKeysToNew must copy settings if nothing to drop and filled source DictCollection"
+If i = 3 Then Keys = Array("x"): currentTest = "[KEEPKNEW-1C] KeepKeysToNew must copy settings if empty source DictCollection"
+If i = 4 Then dc1.Add "x", 1: Keys = Array("x"): currentTest = "[KEEPKNEW-1D] KeepKeysToNew must copy settings if filled source DictCollection"
+        dc1.EmulateCollection = True
+        dc1.DefaultValueEnabled = False
+        dc1.EmptyCollectionValue = "empty"
+        dc1.NonExistingValue = #1/1/2000#
+        dc1.LazySorting = False
+        dc1.ZeroBasedIndex = False
+        dc1.CompareMode = vbTextCompare
+        dc1.ThrowErrors = True
+        ' filter
+        Set dc2 = dc1.KeepKeysToNew(Array())
+        ' tests
+        If dc2.EmulateCollection <> True Or dc2.DefaultValueEnabled <> False Or dc2.EmptyCollectionValue <> "empty" Then logError DebugPrint, errors, ("-> " & currentTest)
+        If dc2.NonExistingValue <> #1/1/2000# Or dc2.LazySorting <> False Or dc2.ZeroBasedIndex <> False Then logError DebugPrint, errors, ("-> " & currentTest)
+        If dc2.CompareMode <> vbTextCompare Or dc2.ThrowErrors <> True Then logError DebugPrint, errors, ("-> " & currentTest)
+    Next
+currentTest = "[KEEPKNEW-2] KeepKeysToNew must return empty DictCollection if there is nothing to keep"
+    Set dc1 = New DictCollection: Set dc2 = New DictCollection
+    dc1.Add("a", 1).Add("b", 2).Add(, 2.5).Add "c", 3
+    Set dc2 = dc1.KeepKeysToNew(Array())
+    If dc2.Count <> 0 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection must be empty")
+currentTest = "[KEEPKNEW-3A] KeepKeysToNew must keep exact matches with case-sensitive matching"
+    Set dc1 = New DictCollection: Set dc2 = New DictCollection
+    dc1.Add("a", 1).Add("b", 2).Add(, 2.5).Add "c", 3
+    Set dc2 = dc1.KeepKeysToNew(Array("a", "B"), , vbBinaryCompare)
+    If dc2.Count <> 1 Or dc2.KeyOfItemAt(0) <> "a" Or dc2.ItemOf(0) = 1 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection contains incorrect key/item")
+currentTest = "[KEEPKNEW-3B] KeepKeysToNew must keep exact matches with case-insensitive matching"
+    Set dc1 = New DictCollection: Set dc2 = New DictCollection
+    dc1.Add("a", 1).Add("b", 2).Add(, 2.5).Add "c", 3
+    Set dc2 = dc1.KeepKeysToNew(Array("a", "B"), , vbTextCompare)
+    If dc2.Count <> 2 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect item count")
+    If dc2.KeyAtKeyIndex(0) <> "a" Or dc2.KeyAtKeyIndex(1) <> "b" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection keys are incorrect")
+    If dc2.ItemAt(0) <> 1 Or dc2.ItemAt(1) <> 2 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection items are incorrect")
+currentTest = "[KEEPKNEW-4A] KeepKeysToNew must keep matching wildcards with case-sensitive matching"
+    Set dc1 = New DictCollection: Set dc2 = New DictCollection
+    dc1.Add("x", 1).Add("_X_", 2).Add("_x", 3).Add "X_", 4
+    ' keep everything that contains "X"
+    Set dc2 = dc1.KeepKeysToNew(Array("*X*"), True, vbBinaryCompare)
+    If dc2.Count <> 2 Or dc2.KeyOfItemAt(0) <> "_X_" Or dc2.KeyOfItemAt(1) <> "X_" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect keys")
+    ' keep everything that starts with "X"
+    Set dc2 = dc1.KeepKeysToNew(Array("X*"), True, vbBinaryCompare)
+    If dc2.Count <> 1 Or dc2.KeyOfItemAt(0) <> "X_" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect keys")
+    ' keep everything that ends with "x"
+    Set dc2 = dc1.KeepKeysToNew(Array("*x"), True, vbBinaryCompare)
+    If dc2.Count <> 2 Or dc2.KeyOfItemAt(0) <> "x" Or dc2.KeyOfItemAt(1) <> "_x" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect keys")
+currentTest = "[KEEPKNEW-4B] KeepKeysToNew must keep matching wildcards with case-insensitive matching"
+    Set dc1 = New DictCollection: Set dc2 = New DictCollection
+    dc1.Add("x", 1).Add("_X_", 2).Add("_X", 3).Add "X_", 4
+    ' keep everything that contains "X" or "x"
+    Set dc2 = dc1.KeepKeysToNew(Array("*X*"), True, vbTextCompare)
+    If dc2.Count <> 4 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect keys")
+    ' keep everything that starts with "X" or "x"
+    Set dc2 = dc1.KeepKeysToNew(Array("x*"), True, vbTextCompare)
+    If dc2.Count <> 2 Or dc2.KeyOfItemAt(0) <> "x" Or dc2.KeyOfItemAt(1) <> "X_" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect keys")
+    ' keep everything that ends with "X" or "x" or matches "_*_"
+    Set dc2 = dc1.KeepKeysToNew(Array("*x", "_*_"), True, vbTextCompare)
+    If dc2.Count <> 3 Or dc2.KeyOfItemAt(0) <> "x" Or dc2.KeyOfItemAt(1) <> "_X_" Or dc2.KeyOfItemAt(2) <> "_X" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect keys")
+currentTest = "[KEEPKNEW-5] KeepKeysToNew must clone non-matching SubCollections"
+    Set dc1 = New DictCollection: Set dc2 = New DictCollection
+    dc1.AddDC("x").Add "a", 1
+    dc1.AddDC("y").Add "b", 2
+    Set dc2 = dc1.KeepKeysToNew(Array("y")) ' keep SubCollection 'y'
+    dc1.AsDC("y").RemoveAll ' empty source SubCollection, must not affect cloned SubCollection
+    If dc2.Count <> 1 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect item number")
+    If dc2.AsDC("y").Count <> 1 Or dc2.AsDC("y").KeyOfItemAt(0) <> "b" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect SubCollection")
+currentTest = "[KEEPKNEW-6] KeepKeysToNew must trow correct error if KeyArr is of invalid type"
+    Set dc1 = New DictCollection: Set dc2 = New DictCollection
+    dc1.ThrowErrors = True
+    testdata = Array(CInt(1), CDbl(1#), "text", New DictCollection)
+    On Error Resume Next
+    For i = 0 To UBound(testdata)
+        Err.Clear: Set dc2 = dc1.KeepKeysToNew(testdata(i)): If Err.Number <> 13 Then logError DebugPrint, errors, ("-> " & currentTest & ": KeyArr of Type " & TypeName(testdata(i)) & " must throw Error 13")
+    Next
+    On Error GoTo Fail: Err.Clear
+    
+    For i = 1 To 4
+        Set dc1 = New DictCollection: Set dc2 = New DictCollection
+If i = 1 Then currentTest = "[DROPKNEW-1A] DropKeysToNew must copy settings if nothing to drop and empty source DictCollection"
+If i = 2 Then dc1.Add "x", 1: currentTest = "[DROPKNEW-1B] DropKeysToNew must copy settings if nothing to drop and filled source DictCollection"
+If i = 3 Then Keys = Array("x"): currentTest = "[DROPKNEW-1C] DropKeysToNew must copy settings if empty source DictCollection"
+If i = 4 Then dc1.Add "x", 1: Keys = Array("x"): currentTest = "[DROPKNEW-1D] DropKeysToNew must copy settings if filled source DictCollection"
+        dc1.EmulateCollection = True
+        dc1.DefaultValueEnabled = False
+        dc1.EmptyCollectionValue = "empty"
+        dc1.NonExistingValue = #1/1/2000#
+        dc1.LazySorting = False
+        dc1.ZeroBasedIndex = False
+        dc1.CompareMode = vbTextCompare
+        dc1.ThrowErrors = True
+        ' filter
+        Set dc2 = dc1.DropKeysToNew(Array())
+        ' tests
+        If dc2.EmulateCollection <> True Or dc2.DefaultValueEnabled <> False Or dc2.EmptyCollectionValue <> "empty" Then logError DebugPrint, errors, ("-> " & currentTest)
+        If dc2.NonExistingValue <> #1/1/2000# Or dc2.LazySorting <> False Or dc2.ZeroBasedIndex <> False Then logError DebugPrint, errors, ("-> " & currentTest)
+        If dc2.CompareMode <> vbTextCompare Or dc2.ThrowErrors <> True Then logError DebugPrint, errors, ("-> " & currentTest)
+    Next
+currentTest = "[DROPKNEW-2] DropKeysToNew must clone all items with keys if nothing to drop"
+    Set dc1 = New DictCollection: Set dc2 = New DictCollection
+    dc1.Add("a", 1).Add("b", 2).Add(, 2.5).Add "c", 3
+    ' filter
+    Set dc2 = dc1.DropKeysToNew(Array())
+    ' tests
+    If dc2.Count <> 3 Or dc2.KeyCount <> 3 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection .Count=" & dc2.Count & " must be " & 3 & " and .KeyCount=" & dc2.KeyCount & " must be 3")
+    If dc2.KeyAtKeyIndex(0) <> "a" Or dc2.KeyAtKeyIndex(1) <> "b" Or dc2.KeyAtKeyIndex(2) <> "c" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection keys are incorrect")
+    If dc2.ItemAt(0) <> 1 Or dc2.ItemAt(1) <> 2 Or dc2.ItemAt(2) <> 3 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection items are incorrect")
+currentTest = "[DROPKNEW-3A] DropKeysToNew must drop exact matches with case-sensitive matching"
+    Set dc1 = New DictCollection: Set dc2 = New DictCollection
+    dc1.Add("a", 1).Add("b", 2).Add(, 2.5).Add "c", 3
+    Set dc2 = dc1.DropKeysToNew(Array("B"), , vbBinaryCompare)
+    If dc2.Count <> 3 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection .Count=" & dc2.Count & " must be " & 3)
+    If dc2.KeyAtKeyIndex(0) <> "a" Or dc2.KeyAtKeyIndex(1) <> "b" Or dc2.KeyAtKeyIndex(2) <> "c" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection keys are incorrect")
+    If dc2.ItemAt(0) <> 1 Or dc2.ItemAt(1) <> 2 Or dc2.ItemAt(2) <> 3 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection items are incorrect")
+currentTest = "[DROPKNEW-3B] DropKeysToNew must drop exact matches with case-insensitive matching"
+    Set dc1 = New DictCollection: Set dc2 = New DictCollection
+    dc1.Add("a", 1).Add("b", 2).Add(, 2.5).Add "c", 3
+    Set dc2 = dc1.DropKeysToNew(Array("B"), , vbTextCompare)
+    If dc2.Count <> 2 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection .Count=" & dc2.Count & " must be " & 2)
+    If dc2.KeyAtKeyIndex(0) <> "a" Or dc2.KeyAtKeyIndex(1) <> "c" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection keys are incorrect")
+    If dc2.ItemAt(0) <> 1 Or dc2.ItemAt(1) <> 3 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection items are incorrect")
+currentTest = "[DROPKNEW-4A] DropKeysToNew must drop matching wildcards with case-sensitive matching"
+    Set dc1 = New DictCollection: Set dc2 = New DictCollection
+    dc1.Add("x", 1).Add("_X_", 2).Add("_x", 3).Add "X_", 4
+    ' drop everything that contains "X"
+    Set dc2 = dc1.DropKeysToNew(Array("*X*"), True, vbBinaryCompare)
+    If dc2.Count <> 2 Or dc2.KeyOfItemAt(0) <> "x" Or dc2.KeyOfItemAt(1) <> "_x" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect keys")
+    ' drop everything that starts with "X"
+    Set dc2 = dc1.DropKeysToNew(Array("X*"), True, vbBinaryCompare)
+    If dc2.Count <> 3 Or dc2.KeyOfItemAt(0) <> "x" Or dc2.KeyOfItemAt(1) <> "_X_" Or dc2.KeyOfItemAt(2) <> "_x" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect keys")
+    ' drop everything that ends with "x"
+    Set dc2 = dc1.DropKeysToNew(Array("*x"), True, vbBinaryCompare)
+    If dc2.Count <> 2 Or dc2.KeyOfItemAt(0) <> "_X_" Or dc2.KeyOfItemAt(1) <> "X_" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect keys")
+currentTest = "[DROPKNEW-4B] DropKeysToNew must drop matching wildcards with case-insensitive matching"
+    Set dc1 = New DictCollection: Set dc2 = New DictCollection
+    dc1.Add("x", 1).Add("_X_", 2).Add("_X", 3).Add "X_", 4
+    ' drop everything that contains "X" or "x"
+    Set dc2 = dc1.DropKeysToNew(Array("*X*"), True, vbTextCompare)
+    If dc2.Count <> 0 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection must be empty")
+    ' drop everything that starts with "X" or "x"
+    Set dc2 = dc1.DropKeysToNew(Array("x*"), True, vbTextCompare)
+    If dc2.Count <> 2 Or dc2.KeyOfItemAt(0) <> "_X_" Or dc2.KeyOfItemAt(1) <> "_X" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect keys")
+    ' drop everything that ends with "X" or "x" or matches "_*_"
+    Set dc2 = dc1.DropKeysToNew(Array("*x", "_*_"), True, vbTextCompare)
+    If dc2.Count <> 1 Or dc2.KeyOfItemAt(0) <> "X_" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect keys")
+currentTest = "[DROPKNEW-5] DropKeysToNew must clone non-matching SubCollections"
+    Set dc1 = New DictCollection: Set dc2 = New DictCollection
+    dc1.AddDC("x").Add "a", 1
+    dc1.AddDC("y").Add "b", 2
+    Set dc2 = dc1.DropKeysToNew(Array("x")) ' drop SubCollection 'x'
+    dc1.AsDC("y").RemoveAll ' empty source SubCollection, must not affect cloned SubCollection
+    If dc2.Count <> 1 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect item number")
+    If dc2.AsDC("y").Count <> 1 Or dc2.AsDC("y").KeyOfItemAt(0) <> "b" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect SubCollection")
+currentTest = "[DROPKNEW-6] DropKeysToNew must trow correct error if KeyArr is of invalid type"
+    Set dc1 = New DictCollection: Set dc2 = New DictCollection
+    dc1.ThrowErrors = True
+    testdata = Array(CInt(1), CDbl(1#), "text", New DictCollection)
+    On Error Resume Next
+    For i = 0 To UBound(testdata)
+        Err.Clear: Set dc2 = dc1.DropKeysToNew(testdata(i)): If Err.Number <> 13 Then logError DebugPrint, errors, ("-> " & currentTest & ": KeyArr of Type " & TypeName(testdata(i)) & " must throw Error 13")
+    Next
+    On Error GoTo Fail: Err.Clear
+
 For i = 1 To 2
     If i = 1 Then
 currentTest = "[CLONE-1A] Clone without argument TargetCollection must copy all settings correctly"
@@ -5182,8 +5729,6 @@ currentTest = "[UNFL-4B] Unflatten to TargetArray must create correct subtree st
     Items = dc1.AsDC("_3").Items: If Items(0) <> "item5" Then logError DebugPrint, errors, ("-> " & currentTest)
     Items = dc1.AsDC("_3_1").Items: If Items(0) <> "item6" Or Items(1) <> "item7" Then logError DebugPrint, errors, ("-> " & currentTest)
 Next
-
-
 
 currentTest = "[INC-1] Increment must assign Amount if index or key does not exist"
     Set dc1 = New DictCollection
@@ -5636,7 +6181,6 @@ currentTest = "[INSERT-4] Inserting items must work with .EmulateCollection=True
         If Keys(0) <> "keyA" Or Keys(1) <> Empty Or Keys(2) <> Empty Or TypeName(Keys(3)) <> "String" Or Keys(3) <> "" Then logError DebugPrint, errors, ("-> " & currentTest)
         If dc1.IndexOfKey("keyA") <> 1 Or dc1.IndexOfKey("") <> 4 Then logError DebugPrint, errors, ("-> " & currentTest)
 
-
 currentTest = "[ADDDC-1] AddDC must copy all settings from parent DictCollection"
     Set dc1 = New DictCollection
     dc1.EmulateDictionary = True
@@ -5759,6 +6303,46 @@ Fail:
 ExitFunction:
     testAdvancedFunctionality = errors
 End Function
+
+' tests utilities (DebugPrint=True -> print errors immediately)
+Private Function testUtilFunctionality(Optional DebugPrint As Boolean = False) As Variant
+    On Error GoTo Fail: Err.Clear
+    Dim errors As Variant, currentTest As String, i As Long, j As Long, testdata As Variant, Val As Variant
+    errors = Array()
+
+currentTest = "[USMW-1] UtilStringMatchesWildcard must not match with empty string"
+    If UtilStringMatchesWildcard("", Split("*x*", "*")) Then logError DebugPrint, errors, ("-> " & currentTest)
+currentTest = "[USMW-2] UtilStringMatchesWildcard must not match with empty wildcard"
+    If UtilStringMatchesWildcard("a", Split("", "*")) Then logError DebugPrint, errors, ("-> " & currentTest)
+currentTest = "[USMW-3] UtilStringMatchesWildcard must not match when searchtext is nonexistent"
+    If UtilStringMatchesWildcard("abc", Split("x", "*")) Then logError DebugPrint, errors, ("-> " & currentTest)
+    If UtilStringMatchesWildcard("abc", Split("*x", "*")) Then logError DebugPrint, errors, ("-> " & currentTest)
+    If UtilStringMatchesWildcard("abc", Split("x*", "*")) Then logError DebugPrint, errors, ("-> " & currentTest)
+currentTest = "[USMW-4] UtilStringMatchesWildcard must not match when searchtext is not at start"
+    If UtilStringMatchesWildcard("abc", Split("b*", "*")) Then logError DebugPrint, errors, ("-> " & currentTest)
+currentTest = "[USMW-5] UtilStringMatchesWildcard must not match when searchtext is not at end"
+    If UtilStringMatchesWildcard("abc", Split("*b", "*")) Then logError DebugPrint, errors, ("-> " & currentTest)
+currentTest = "[USMW-6] UtilStringMatchesWildcard must not match when searchtext is not exactly matched"
+    If UtilStringMatchesWildcard("bc", Split("b", "*")) Then logError DebugPrint, errors, ("-> " & currentTest)
+currentTest = "[USMW-7] UtilStringMatchesWildcard must match when searchtext is at start"
+    If Not UtilStringMatchesWildcard("abc", Split("a*", "*")) Then logError DebugPrint, errors, ("-> " & currentTest)
+    If Not UtilStringMatchesWildcard("abc", Split("*a*", "*")) Then logError DebugPrint, errors, ("-> " & currentTest)
+currentTest = "[USMW-8] UtilStringMatchesWildcard must match when searchtext is at end"
+    If Not UtilStringMatchesWildcard("abc", Split("*c", "*")) Then logError DebugPrint, errors, ("-> " & currentTest)
+    If Not UtilStringMatchesWildcard("abc", Split("*c*", "*")) Then logError DebugPrint, errors, ("-> " & currentTest)
+currentTest = "[USMW-9] UtilStringMatchesWildcard must match when searchtext is in between"
+    If Not UtilStringMatchesWildcard("abc", Split("*b*", "*")) Then logError DebugPrint, errors, ("-> " & currentTest)
+currentTest = "[USMW-10] UtilStringMatchesWildcard must match when searchtext matches exactly"
+    If Not UtilStringMatchesWildcard("abc", Split("abc", "*")) Then logError DebugPrint, errors, ("-> " & currentTest)
+    
+
+    GoTo ExitFunction
+Fail:
+    logError DebugPrint, errors, ("-> " & currentTest & " -> Error " & Err.Number & " " & Err.Description)
+ExitFunction:
+    testUtilFunctionality = errors
+End Function
+
 
 ' tests bugfixes, workarounds and special cases (DebugPrint=True -> print errors immediately)
 Private Function testFixes(Optional DebugPrint As Boolean = False) As Variant

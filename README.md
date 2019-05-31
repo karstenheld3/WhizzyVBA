@@ -17,6 +17,7 @@ DictCollection.cls is a mix between Scripting.Dictionary and Collection that can
 - **Compatible**: Can emulate and replace Scripting.Dictionary or VB6/VBA Collection
 - **Versatile**: Can be used as Array (ArrayList), Key-Value-Store (Map) and Object Tree (JSON storage)
 - **Fast**: Retrieve items by index with array-like speed (faster than Dictionary and Collection)
+- **Searchable**: Has functions for searching, matching, dropping, keeping keys that support wildcards
 - **Nonthrowing Design**: Does not throw errors by default (configurable using `dc.ThrowErrors`)
 - **Endless Subcollection Chaining**: `dc("key1")("key2")("nonexisting_key")("key3")` always returns DictCollections that can be NONEXISTING, EMPTY or FILLED. Checking if a nested item exists is a one-liner.
 - **High Test Coverage**: `.SelfTest()` covers all important functions and emulation features
@@ -99,60 +100,70 @@ A step-by-step introduction into the basic functionality of DictCollection. See 
 
 ### Other Collection Functions
 
-| What                                                        | How                                                          |
-| ----------------------------------------------------------- | ------------------------------------------------------------ |
-| Collection-compatible Add function                          | `dc.Add2(Item, [Key], [Before], [After]) As DictCollection`  |
-| Copy all items and keys                                     | `dc.CopyItems([SourceCollection], [TargetCollection],   [TargetIndex]) As DictCollection` |
-| Copy settings from on DC to another DC                      | `dc.CopyAllSettingsExceptCollectionType(FromCollection,   ToCollection)` |
-| Copy subcollection chaining settings                        | `dc.CopySubCollectionChainingSettings(FromCollection,   ToCollection)` |
-| Clone entire DictCollection tree                            | `dc.Clone([TargetCollection]) as DictCollection`             |
-| Set item by index or key (chainable function)               | `dc.SetItem(IndexOrKey, Value) As DictCollection`            |
-| Increment stored number by 1 or Amount                      | `dc.Increment(IndexOrKey, [Amount]) As Variant`              |
-| Check if item has key                                       | `dc.ItemHasKey(ItemIndex) As Boolean`                        |
-| Check if item is a DictCollection                           | `dc.ItemIsDC(IndexOrKey) As Boolean`                         |
-| Check if item is Object                                     | `dc.ItemIsObject(IndexOrKey) As Boolean`                     |
-| Get item index associated with key (String)                 | `dc.IndexOfKey2(Key) As Long`                                |
-| Get internal key storage index of an items key              | `dc.KeyIndexOfItemAt(Index) As Long`                         |
-| Get key at internal key storage index                       | `dc.KeyAtKeyIndex(KeyIndex) As Variant`                      |
-| Get string key at internal key storage index                | `dc.KeyAtKeyIndexAsString(KeyIndex) As Variant`              |
-| Get an items string key from internal key storage           | `dc.KeyOfItemAtAsString(Index) As String`                    |
-| Get all items and keys as Array(i,k)                        | `dc.ToArray() As Variant`                                    |
-| Get items and keys as Array(i,k)                            | `dc.ItemsAndKeys([IncludeEmptyItems], [IncludeItemsWithoutKeys]) As Variant` |
-| Get items and keys as Array(i,k) sorted by keys             | `dc.ItemsAndKeysSortedByKeys([IncludeEmptyItems],   [IncludeItemsWithoutKeys]) As Variant` |
-| Get items as Array sorted by keys                           | `dc.ItemsSortedByKeys([IncludeEmptyItems], [IncludeItemsWithoutKeys]) As Variant` |
-| Get keys and items as Array(k,i) sorted by keys             | d`c.SortedKeysAndItems([IncludeEmptyKeys], [IncludeEmptyItems]) As Variant` |
-| Find key index where insert leaves keys sorted              | `dc.FindKeyInsertIndex(SearchedKey As Variant, [CompareMode]) As Long` |
-| Find all keys that start with text and return as Array      | `dc.FindKeysThatStartWith(SearchText, [CompareMode]) As Variant` |
-| Get infos about DictCollection tree content                 | `dc.AnalyzeDictCollectionTree([Recursive]) As DictCollection` with the following keys: |
-|                                                             | `"NonStringConvertableItems"` - the number of the items in the subtree that are not convertable to String |
-|                                                             | `"NonStringConvertableKeys"` - the number of the keys in the subtree that are not convertable to String |
-|                                                             | `"SubCollections"` - the number of DictCollections in the subtree without counting items below circular references |
-|                                                             | `"SubItems"` - the number of items in the subtree without counting items below circular references |
-|                                                             | `"CircularReferences"` - the number of DictCollections in the subtree that contain DictCollections of upper levels of the same tree |
-| Assign keys to items that have no keys in the format "_POS" | `dc.EnsureAllItemsHaveKeys()`                                |
-| Convert DC tree to single key-value-store                   | `dc.Flatten([TargetCollection] As DictCollection,   [ReturnAnalysisResults]) As DictCollection` |
-| Build DC tree from single key-value-store                   | `dc.Unflatten([TargetCollection])`                           |
-| Demo basic functionality in Immediate Window                | `dc.DemoBasicFunctionality()`                                |
-| Run all tests with output to Immediate Window               | `dc.SelfTest([DebugPrint])`                                  |
-| Run compatibility tests and return errors                   | `dc.TestCompatibility([DebugPrint]) as Variant`              |
-| Run functionality tests and return errors                   | `dc.TestFunctionality([DebugPrint]) as Variant`              |
+| What                                                         | How                                                          |
+| ------------------------------------------------------------ | ------------------------------------------------------------ |
+| Collection-compatible Add function                           | `dc.Add2(Item, [Key], [Before], [After]) As DictCollection`  |
+| Add key-value pairs from 2-dimensional or nested array (doesn't add empty keys) | `dc.AddPairs(Arr, [KeyIsFirstColumn]) As DictCollection`     |
+|                                                              | Example: `dc.AddPairs Array(Array("a",1), Array("b",2))`     |
+| Copy all items and keys                                      | `dc.CopyItems([SourceCollection], [TargetCollection],   [TargetIndex]) As DictCollection` |
+| Copy settings from on DC to another DC                       | `dc.CopyAllSettingsExceptCollectionType(FromCollection,   ToCollection)` |
+| Copy subcollection chaining settings                         | `dc.CopySubCollectionChainingSettings(FromCollection,   ToCollection)` |
+| Clone entire DictCollection tree                             | `dc.Clone([TargetCollection]) as DictCollection`             |
+| Create new DictCollection by dropping items with keys specified in the `KeyArr` array. Can handle asterisk wildcards like `"*searchText*"` when used with `AllowWildcards=True`. | `dc.DropKeysToNew(KeyArr, [AllowWildcards], [CompareMode]) As DictCollection` |
+|                                                              | Example: `dc.AddPairs(Array(Array("a",1), Array("b",2), Array("bx",3))).DropKeysToNew(Array("*b*"), True) `  will drop any item with a key containing the character `"b"` (default is case-sensitive comparison) and create a new DictCollection that contains only the first key-value-pair ["a",1]. |
+|                                                              | Example: `dc.AddPairs(Array(Array("a",1), Array("b",2), Array("Bx",3))).DropKeysToNew(Array("a"), False, vbBinaryCompare) ` will drop the item with the key `"a"` and create a new DictCollection that contains only the last two key-value-pairs ["b",2] and ["Bx",3]. |
+| Create new DC by keeping the keys specified in the `KeyArr` array. Identical to the `DropKeysToNew` function but keeps specified items instead. Use this function to return search results. | `dc.KeepKeysToNew(KeyArr, [AllowWildcards], [CompareMode]) As DictCollection` |
+|                                                              | Example: `dc.AddPairs Array(Array("a", 1), Array("b", 2), Array("bx", 3)).dc.KeepKeysToNew(Array("b"))` will create a new DictCollection that contains the key-value-pair ["b",2] |
+| 'Creates a new DictCollection with keys and items that match the keys specified in the `KeyArr` array. The items will have the same order as the specified keys in `KeyArr`. Unmatched keys in `KeyArr` will be included with `NotFoundValue` as items. | `MatchKeysToNew(KeyArr, [NotFoundValue], [CompareMode]) As DictCollection` |
+|                                                              | Example: `dc.AddPairs(Array(Array("a", 1))).MatchKeysToNew(Array("x", "a"), -1)` will create a new DictCollection that contains the key-value-pairs ["x",-1] and ["a",1] |
+| Set item by index or key (chainable function)                | `dc.SetItem(IndexOrKey, Value) As DictCollection`            |
+| Increment stored number by 1 or Amount                       | `dc.Increment(IndexOrKey, [Amount]) As Variant`              |
+| Check if item has key                                        | `dc.ItemHasKey(ItemIndex) As Boolean`                        |
+| Check if item is a DictCollection                            | `dc.ItemIsDC(IndexOrKey) As Boolean`                         |
+| Check if item is Object                                      | `dc.ItemIsObject(IndexOrKey) As Boolean`                     |
+| Get item index associated with key (String)                  | `dc.IndexOfKey2(Key) As Long`                                |
+| Get internal key storage index of an items key               | `dc.KeyIndexOfItemAt(Index) As Long`                         |
+| Get key at internal key storage index                        | `dc.KeyAtKeyIndex(KeyIndex) As Variant`                      |
+| Get string key at internal key storage index                 | `dc.KeyAtKeyIndexAsString(KeyIndex) As Variant`              |
+| Get an items string key from internal key storage            | `dc.KeyOfItemAtAsString(Index) As String`                    |
+| Get all items and keys as Array(i,k)                         | `dc.ToArray() As Variant`                                    |
+| Get items and keys as Array(i,k)                             | `dc.ItemsAndKeys([IncludeEmptyItems], [IncludeItemsWithoutKeys]) As Variant` |
+| Get items and keys as Array(i,k) sorted by keys              | `dc.ItemsAndKeysSortedByKeys([IncludeEmptyItems],   [IncludeItemsWithoutKeys]) As Variant` |
+| Get items as Array sorted by keys                            | `dc.ItemsSortedByKeys([IncludeEmptyItems], [IncludeItemsWithoutKeys]) As Variant` |
+| Get keys and items as Array(k,i) sorted by keys              | d`c.SortedKeysAndItems([IncludeEmptyKeys], [IncludeEmptyItems]) As Variant` |
+| Find key index where insert leaves keys sorted               | `dc.FindKeyInsertIndex(SearchedKey As Variant, [CompareMode]) As Long` |
+| Find all keys that start with text and return as Array       | `dc.FindKeysThatStartWith(SearchText, [CompareMode]) As Variant` |
+| Get infos about DictCollection tree content                  | `dc.AnalyzeDictCollectionTree([Recursive]) As DictCollection` with the following keys: |
+|                                                              | `"NonStringConvertableItems"` - the number of the items in the subtree that are not convertable to String |
+|                                                              | `"NonStringConvertableKeys"` - the number of the keys in the subtree that are not convertable to String |
+|                                                              | `"SubCollections"` - the number of DictCollections in the subtree without counting items below circular references |
+|                                                              | `"SubItems"` - the number of items in the subtree without counting items below circular references |
+|                                                              | `"CircularReferences"` - the number of DictCollections in the subtree that contain DictCollections of upper levels of the same tree |
+| Assign keys to items that have no keys in the format "_POS"  | `dc.EnsureAllItemsHaveKeys()`                                |
+| Convert DC tree to single key-value-store                    | `dc.Flatten([TargetCollection] As DictCollection,   [ReturnAnalysisResults]) As DictCollection` |
+| Build DC tree from single key-value-store                    | `dc.Unflatten([TargetCollection])`                           |
+| Demo basic functionality in Immediate Window                 | `dc.DemoBasicFunctionality()`                                |
+| Run all tests with output to Immediate Window                | `dc.SelfTest([DebugPrint])`                                  |
+| Run compatibility tests and return errors                    | `dc.TestCompatibility([DebugPrint]) as Variant`              |
+| Run functionality tests and return errors                    | `dc.TestFunctionality([DebugPrint]) as Variant`              |
 
 ### Utility Functions
 
-| What                                                    | How                                                          |
-| ------------------------------------------------------- | ------------------------------------------------------------ |
-| Get missing argument (Error 448) as Variant             | `dc.UtilGetMissingValue([DoNotPassAnythingHere])`            |
-| Assigns object or value to Variant variable             | `dc.UtilAssignFromTo(FromVariable, ToVariable)`              |
-| Add value to array (creates one)                        | `dc.UtilAddArrayValue(Arr As Variant, Val As Variant)`       |
-| Find index of value in array or return -1               | `dc.UtilFindArrayIndex(Arr, Val) As Long`                    |
-| Remove a value from an array by index                   | `dc.UtilRemoveArrayValueByIndex(arr, Index)`                 |
-| Get array dimensions (0 = uninitialized)                | `dc.UtilArrayDimensions(Arr) As Integer`                     |
-| Remove a value from an array                            | `dc.UtilRemoveArrayValue(Arr, Val)`                          |
-| Sort one/two-dimensional/nested array                   | `dc.UtilSortArray(Arr, FromIndex, ToIndex)`                  |
-| Sort one/two-dimensional/nested array using `StrComp()` | `dc.UtilSortStringArray(Arr, FromIndex, ToIndex,   CompareMode)` |
-| Check if text has only number chars                     | `dc.UtilStringConsistsOfNumericAsciiChars(Text) As   Boolean` |
-| Build concatenated string by repeating a text           | `dc.UtilStringRepeat(Text, NumberOfTimes) As String`         |
-| Check if text starts with another text                  | `dc.UtilStringStartsWith(Text, SearchText, [CompareMode]) As Boolean` |
+| What                                                         | How                                                          |
+| ------------------------------------------------------------ | ------------------------------------------------------------ |
+| Get missing argument (Error 448) as Variant                  | `dc.UtilGetMissingValue([DoNotPassAnythingHere])`            |
+| Assigns object or value to Variant variable                  | `dc.UtilAssignFromTo(FromVariable, ToVariable)`              |
+| Add value to array (creates one)                             | `dc.UtilAddArrayValue(Arr As Variant, Val As Variant)`       |
+| Find index of value in array or return -1                    | `dc.UtilFindArrayIndex(Arr, Val) As Long`                    |
+| Remove a value from an array by index                        | `dc.UtilRemoveArrayValueByIndex(arr, Index)`                 |
+| Get array dimensions (0 = uninitialized)                     | `dc.UtilArrayDimensions(Arr) As Integer`                     |
+| Remove a value from an array                                 | `dc.UtilRemoveArrayValue(Arr, Val)`                          |
+| Sort one/two-dimensional/nested array                        | `dc.UtilSortArray(Arr, FromIndex, ToIndex)`                  |
+| Sort one/two-dimensional/nested array using `StrComp()`      | `dc.UtilSortStringArray(Arr, FromIndex, ToIndex,   CompareMode)` |
+| Check if text has only number chars                          | `dc.UtilStringConsistsOfNumericAsciiChars(Text) As   Boolean` |
+| Build concatenated string by repeating a text                | `dc.UtilStringRepeat(Text, NumberOfTimes) As String`         |
+| Check if text starts with another text                       | `dc.UtilStringStartsWith(Text, SearchText, [CompareMode]) As Boolean` |
+| Check if text matches asterisk-splitted wildcards like `"*.*"` or `*findText*`. | `dc.UtilStringMatchesWildcard(TextToCheck, WildcardSplit, [CompareMode]) As Boolean` |
 
 ### Demos and Use Cases (Todo)
 #### Storing and retrieving data in object trees
