@@ -8,7 +8,7 @@ Attribute VB_Creatable = False
 Attribute VB_PredeclaredId = True
 Attribute VB_Exposed = True
 ' ======================== START: DOCUMENTATION =====================================================================================================
-' DictCollection 039 (VBA Version) - A mix between Dictionary and Collection that can emulate both
+' DictCollection 040 (VBA Version) - A mix between Dictionary and Collection that can emulate both
 ' Karsten Held 2016-2019, karstenheld3@gmail.com, MIT License
 '
 ' ----------- HOW TO USE ----------------------------------------------------------------------------------------------------------------------------
@@ -81,17 +81,21 @@ Attribute VB_Exposed = True
 '                                                   4 = Filled Key-Value-Store, 5 = Key-Value-Store with at least one item having no key
 '
 ' ----------- OTHER DICTCOLLECTION FUNCTIONS ----------------------------------------------------------------------------------------------------------
-' Collection-compatible Add function                dc.Add2(Item, [Key], [Before], [After]) As DictCollection
-' Add key-value pairs from 2-dimensional            dc.AddPairs(Arr, [KeyIsFirstColumn]) As DictCollection
+'  * = function is chainable, it always returns the DictCollection which it is a members of
+' Collection-compatible Add function                * dc.Add2(Item, [Key], [Before], [After]) As DictCollection
+' Add key-value pairs from 2-dimensional            * dc.AddPairs(Arr, [KeyIsFirstColumn]) As DictCollection
 '   or nested array (doesn't add empty keys)          Example: dc.AddPairs Array(Array("a",1), Array("b",2))
-' Copy all items and keys                           dc.CopyItems([SourceCollection], [TargetCollection], [TargetIndex]) As DictCollection
+' Copy all items and keys to another DC             * dc.CopyItems(TargetCollection, [TargetIndex]) As DictCollection
+' Copy all items and keys to new DictCollection     dc.CopyItemsToNew() As DictCollection
 ' Copy settings from on DC to another DC            dc.CopyAllSettingsExceptCollectionType(FromCollection, ToCollection)
 ' Copy subcollection chaining settings              dc.CopySubCollectionChainingSettings(FromCollection, ToCollection)
-' Clone entire DictCollection tree                  dc.Clone([TargetCollection]) as DictCollection
+' Clone entire DictCollection tree to new DC        dc.CloneToNew() as DictCollection
+' Clone entire DictCollection to existing DC        * dc.CloneTo(TargetCollection) as DictCollection
+' Clone to existing DC and keep its content         * dc.CloneToPreserve(TargetCollection) as DictCollection
 ' Create new DC by dropping specified keys          dc.DropKeysToNew(KeyArr, [AllowWildcards], [CompareMode]) As DictCollection
 ' Create new DC by keeping specified keys           dc.KeepKeysToNew(KeyArr, [AllowWildcards], [CompareMode]) As DictCollection
 ' Create new DC by matching specified keys          dc.MatchKeysToNew(KeyArr, [NotFoundvalue], [CompareMode]) As DictCollection
-' Set item by index or key (chainable function)     dc.SetItem(IndexOrKey, Value) As DictCollection
+' Set item by index or key (chainable function)     * dc.SetItem(IndexOrKey, Value) As DictCollection
 ' Increment stored number by 1 or Amount            dc.Increment(IndexOrKey, [Amount]) As Variant
 ' Check if item has key                             dc.ItemHasKey(ItemIndex) As Boolean
 ' Check if item is a DictCollection                 UNTESTED dc.ItemIsDC(IndexOrKey) As Boolean
@@ -110,8 +114,10 @@ Attribute VB_Exposed = True
 ' Find all keys that start with text (as Array)     UNTESTED dc.FindKeysThatStartWith(SearchText, [CompareMode]) As Variant
 ' Get infos about DictCollection tree content       dc.AnalyzeDictCollectionTree([Recursive]) As DictCollection
 ' Assign "_POS" keys to items that have no keys     dc.EnsureAllItemsHaveKeys()
-' Convert DC tree to single key-value-store         dc.Flatten([TargetCollection] As DictCollection, [ReturnAnalysisResults]) As DictCollection
-' Build DC tree from single key-value-store         dc.Unflatten([TargetCollection])
+' Flatten DC tree to single key-value-store         * dc.Flatten() As DictCollection
+' Flatten DC tree to new DictCollection             dc.FlattenToNew() As DictCollection
+' Restore DC tree from single key-value-store       * dc.Unflatten() As DictCollection
+' Restore DC tree to new DictCollection             dc.UnflattenToNew() As DictCollection
 ' Demo basic functionality in Immediate Window      dc.DemoBasicFunctionality()
 ' Run all tests with output to Immediate Window     dc.SelfTest([DebugPrint])
 ' Run compatibility tests and return errors         dc.TestCompatibility([DebugPrint]) as Variant
@@ -178,23 +184,40 @@ Attribute VB_Exposed = True
 ' - When running .SelfTest and other test functions in Excel VBA Immediate Window, saving the file just before running the tests helps avoid crashes
 '
 ' ----------- KNOWN DESIGN PROBLEMS -----------------------------------------------------------------------------------------------------------------
-' - Some functions are chainable, others like .Clone are not. This is confusing.
-' - Some functions like .Filter*ToNewDC() return new DictCollections, others modify a TargetCollection. This is inconsistent.
-' - Default Value allows chainability but trade-off with disfunctional VarType() is tricky and difficult to understand.
+' - Default Value allows chainability but trade-off with VarType() not working is tricky and difficult to understand
 ' - Emulation of Collection introduces mExternalIndexOffset, making it complicated for private functions to use public index based functions
+' - .AddDC() returns newly added subcollection while .Add() returns root collection which is inconsistent but useful
+' - with .ThrowErrors=False existing keys are overwritten, there is no option to silently reject overwrites
+'
+' ----------- BREAKING CHANGES ----------------------------------------------------------------------------------------------------------------------
+'   2018-10-08 V036     None (initial commit on GitHub)
+'   2019-06-01 V040     Changed functions .CopyItems(), .Clone(), .Flatten(), .Unflatten() to support chainability
+'       Old: CopyItems(Optional SourceCollection As DictCollection, Optional TargetCollection As DictCollection, Optional targetIndex As Long = -1) As DictCollection
+'          New: CopyItems(TargetCollection As DictCollection, Optional targetIndex As Long = -1) As DictCollection
+'           New: CopyItemsToNew() As DictCollection
+'       Old: Flatten(Optional TargetCollection As DictCollection, Optional ReturnAnalysisResults As Boolean = False) As DictCollection
+'           New: Flatten() As DictCollection
+'           New: FlattenToNew() As DictCollection
+'       Old: Unflatten(Optional TargetCollection As DictCollection)
+'           New: Unflatten() As DictCollection
+'           New: UnflattenToNew() as DictCollection
+'       Old: Clone(Optional TargetCollection As DictCollection) As DictCollection
+'           New: CloneToNew() As DictCollection
+'           New: CloneTo(TargetCollection As DictCollection) As DictCollection
+'           New: CloneToPreserve(TargetCollection As DictCollection) As DictCollection
 '
 ' ----------- TODOS ---------------------------------------------------------------------------------------------------------------------------------
-' - make .Flatten and .Unflatten chainable
+' - implement .FromPairs(Arr) -> creates new DictCollection from array containing key-value-pairs
 ' - implement .Swap(IndexA, IndexB) -> swaps two items
 ' - implement .AddKey(Key, Optional Index) -> adds a key; if the item at index already has a key, another key is being added for that item
 ' - implement .CollectionType = 6 -> keys only (will affect copy/clone)
 ' - implement .AddValuesFromRange(Values, IndexOfValues, Keys, IndexOfKeys, KeysAndValuesAreRows) -> adds values/keys from Excel Range
 ' - implement .AddValuesFromArray(Values, DimensionIndexOfValues, Keys, DimensionIndexOfKeys) -> adds values/keys from one/multi-dimensional arrays
 ' - implement .AddValuesFromDictCollection(AnotherDictCollection) -> adds the content from another DictCollection
-' - implement .GetDouble(IndexOrKey, Optional DefaultValue) -> returns items as Double for typesafe usage
-' - implement .GetLong(IndexOrKey, Optional DefaultValue) -> returns items as Long for typesafe usage
-' - implement .GetDate(IndexOrKey, Optional DefaultValue) -> returns items as Date for typesafe usage
-' - implement .GetString(IndexOrKey, Optional DefaultValue) -> returns items as String for typesafe usage
+' - implement .AsDouble(IndexOrKey, Optional DefaultValue) -> returns items as Double for typesafe usage
+' - implement .AsLong(IndexOrKey, Optional DefaultValue) -> returns items as Long for typesafe usage
+' - implement .AsDate(IndexOrKey, Optional DefaultValue) -> returns items as Date for typesafe usage
+' - implement .AsString(IndexOrKey, Optional DefaultValue) -> returns items as String for typesafe usage
 ' - set empty/missing item and key values as private constants for better hackability
 '
 ' ======================== END: DOCUMENTATION =======================================================================================================
@@ -466,8 +489,9 @@ End Sub
 Public Sub CopyAllSettingsExceptCollectionType(FromCollection As DictCollection, ToCollection As DictCollection)
     If (FromCollection Is Nothing) Or (ToCollection Is Nothing) Then Exit Sub
     ' copy these two first as these also implicitly set .ThrowErrors, .DefaultValueEnabled and .NonExistingValue
-    ToCollection.EmulateCollection = FromCollection.EmulateCollection
-    ToCollection.EmulateDictionary = FromCollection.EmulateDictionary
+    ' only apply them if they are different to prevent loosing Dictionary original key types
+    If ToCollection.EmulateCollection <> FromCollection.EmulateCollection Then ToCollection.EmulateCollection = FromCollection.EmulateCollection
+    If ToCollection.EmulateDictionary <> FromCollection.EmulateDictionary Then ToCollection.EmulateDictionary = FromCollection.EmulateDictionary
     ' copy all others
     ToCollection.NonExistingValue = FromCollection.NonExistingValue
     ToCollection.EmptyCollectionValue = FromCollection.EmptyCollectionValue
@@ -2134,17 +2158,17 @@ Private Function internalFilterKeysToNew(KeyArr As Variant, AllowWildcards As Bo
     If Not IsArray(KeyArr) Then
         If mThrowErrors Then If mThrowErrors Then Err.Raise 13, "KeyArr is not an array"
     Else
-        ' build cleaned key array
-        keyArr2 = Array()
-        lower = LBound(KeyArr): upper = UBound(KeyArr)
-        For i = lower To upper
-            If TypeName(KeyArr(i)) = "String" Then
-                If Len(KeyArr(i)) > 0 Then UtilAddArrayValue keyArr2, KeyArr(i)
-            End If
-        Next
         Select Case action
-            ' drop and keep
+            ' drop and keep items
             Case 1, 2:
+                ' build cleaned key array
+                keyArr2 = Array()
+                lower = LBound(KeyArr): upper = UBound(KeyArr)
+                For i = lower To upper
+                    If TypeName(KeyArr(i)) = "String" Then
+                        If Len(KeyArr(i)) > 0 Then UtilAddArrayValue keyArr2, KeyArr(i)
+                    End If
+                Next
                 If AllowWildcards And UBound(keyArr2) > -1 Then
                     ' produce splits
                     ReDim wildcardSplits(0 To UBound(keyArr2))
@@ -2168,7 +2192,7 @@ Private Function internalFilterKeysToNew(KeyArr As Variant, AllowWildcards As Bo
                         If (action = 1 And Not match) Or (action = 2 And match) Then
                             If TypeName(allItems(i)) = "DictCollection" Then
                                 ' copy key and clone DictCollection item
-                                Set tempDC = allItems(i).Clone
+                                Set tempDC = allItems(i).CloneToNew
                                 retVal.Add currentKey, tempDC
                             Else
                                 ' copy item and key
@@ -2181,21 +2205,28 @@ Private Function internalFilterKeysToNew(KeyArr As Variant, AllowWildcards As Bo
             Case 3:
                 Dim fkr As FindKeyResult
                 ' run over all keys to match
-                For i = 0 To UBound(keyArr2)
-                    currentKey = keyArr2(i)
-                    ' try to find key
-                    fkr = internalFindKeyIndex(currentKey, CompareMode)
-                    If fkr.Exact Then
-                        ' key found, add item (clone if DictCollection)
-                        If TypeName(allItems(allKeyItemIndexes(fkr.Index))) = "DictCollection" Then
-                            Set tempDC = allItems(allKeyItemIndexes(fkr.Index)).Clone
-                            retVal.Add currentKey, tempDC
+                For i = 0 To UBound(KeyArr)
+                    If TypeName(KeyArr(i)) = "String" Then
+                        currentKey = KeyArr(i)
+                        If Len(currentKey) > 0 Then
+                            ' try to find key
+                            fkr = internalFindKeyIndex(currentKey, CompareMode)
+                            If fkr.Exact Then
+                                ' key found, add item (clone if DictCollection)
+                                If TypeName(allItems(allKeyItemIndexes(fkr.Index))) = "DictCollection" Then
+                                    Set tempDC = allItems(allKeyItemIndexes(fkr.Index)).CloneToNew
+                                    retVal.Add currentKey, tempDC
+                                Else
+                                    retVal.Add currentKey, allItems(allKeyItemIndexes(fkr.Index))
+                                End If
+                            Else
+                                ' key not found, add notFoundValue
+                                retVal.Add currentKey, NotFoundValue
+                            End If
                         Else
-                            retVal.Add currentKey, allItems(allKeyItemIndexes(fkr.Index))
+                            ' empty key, add notFoundValue
+                            retVal.Add currentKey, NotFoundValue
                         End If
-                    Else
-                        ' key not found, add notFoundValue
-                        retVal.Add currentKey, NotFoundValue
                     End If
                 Next
         End Select
@@ -2854,19 +2885,33 @@ Public Sub EnsureAllItemsHaveKeys()
     Next
 End Sub
 
-' UNTESTED
+' Copies items of this DictCollection to TargetCollection from given targetIndex by overwriting existing items.
+' targetIndex = -1 will copy all items to the end of TargetCollection, preserving all existing items
+Public Function CopyItems(TargetCollection As DictCollection, Optional targetIndex As Long = -1) As DictCollection
+    internalCopyItems Me, TargetCollection, targetIndex
+    Set CopyItems = Me
+End Function
+
+' Copies items of this DictCollection to TargetCollection from given targetIndex by overwriting existing items.
+' targetIndex = -1 will copy all items to the end of TargetCollection, preserving all existing items
+Public Function CopyItemsToNew() As DictCollection
+    Dim newDc As DictCollection
+    internalCopyItems Me, newDc, -1
+    Set CopyItemsToNew = newDc
+End Function
+
 ' will copy all items and keys to given TargetCollection (or a new DictCollection) that will be returned
-' if no SourceCollection is passed, this DictCollection will be takes as SourceCollection
-' if no TargetCollection is passed, the SourceCollections settings will be copyied to the TargetCollection
-' TargetIndex = -1 will copy all items to the end of TargetCollection
-Public Function CopyItems(Optional SourceCollection As DictCollection, Optional TargetCollection As DictCollection, Optional targetIndex As Long = -1) As DictCollection
-    Dim sourceIndex As Long, targetIndex2 As Long, tempKey As Variant, tempItem As Variant, throwErrorsWasTrue As Boolean, upper As Long, lower As Long, useAdd As Boolean
-    If TargetCollection Is Nothing Then
-        Set TargetCollection = New DictCollection: CopyAllSettingsExceptCollectionType Me, TargetCollection
-    Else
-        throwErrorsWasTrue = TargetCollection.ThrowErrors
-    End If
+' if no SourceCollection is passed, this DictCollection will be taken as SourceCollection
+' if no TargetCollection is passed, the SourceCollections settings will be copied to the TargetCollection
+' targetIndex = -1 will copy all items to the end of TargetCollection, preserving all existing items
+Private Function internalCopyItems(Optional SourceCollection As DictCollection, Optional TargetCollection As DictCollection, Optional targetIndex As Long = -1)
+    Dim sourceIndex As Long, targetIndex2 As Long, tempKey As Variant, tempItem As Variant
+    Dim throwErrorsWasTrue As Boolean, upper As Long, lower As Long, useAdd As Boolean
     If SourceCollection Is Nothing Then Set SourceCollection = Me
+    If TargetCollection Is Nothing Then
+        Set TargetCollection = New DictCollection: CopyAllSettingsExceptCollectionType SourceCollection, TargetCollection
+    End If
+    throwErrorsWasTrue = TargetCollection.ThrowErrors
     ' ensure correct indexes
     If SourceCollection.ZeroBasedIndex Then
         lower = 0: upper = SourceCollection.Count - 1
@@ -2914,39 +2959,78 @@ Public Function CopyItems(Optional SourceCollection As DictCollection, Optional 
         Next
     End If
     If throwErrorsWasTrue Then TargetCollection.ThrowErrors = True
-    Set CopyItems = TargetCollection
 End Function
 
 ' runs over all subcollections recoursively and merges their items into this DictCollection
 ' keys are concatenated into the root collection using the delimiter "." in the format "ROOT_KEY.SUB_KEY.SUB_SUB_KEY"
 ' items without keys will have an underscore as key followed their position in the item array: "_POS" ("_1" to "_N")
 ' if "_POS" is already taken, a counter C ranging from 1 to 1000 is added as "_POS_C" until the new key is not taken
-' if a non-nothing TargetCollection is passed, the flattened structure will created in TargetCollection and this DictCollection will not be modified
-' will perform an analysis when ReturnAnalysisResults=True and return the results so that warnings can be generated afterwards
-' will disable any emulations in this or (when passed as argument) TargetCollection
-Public Function Flatten(Optional TargetCollection As DictCollection, Optional ReturnAnalysisResults As Boolean = False) As DictCollection
-    Dim Options As WalkDictCollectionTreeOptions: Options.Flatten = True: Options.EnsureKeys = True: Options.Analyze = ReturnAnalysisResults
-    Set Flatten = walkDictCollectionTree(Options, , TargetCollection)
+' will disable any emulations in this DictCollection
+' chainable (returns this DictCollection)
+Public Function Flatten() As DictCollection
+    Dim Options As WalkDictCollectionTreeOptions: Options.Flatten = True: Options.EnsureKeys = True
+    walkDictCollectionTree Options
+    Set Flatten = Me
 End Function
 
-Public Function Unflatten(Optional TargetCollection As DictCollection)
+' runs over all subcollections recoursively and merges their items into a new DictCollection
+' keys are concatenated into the root collection using the delimiter "." in the format "ROOT_KEY.SUB_KEY.SUB_SUB_KEY"
+' items without keys will have an underscore as key followed their position in the item array: "_POS" ("_1" to "_N")
+' if "_POS" is already taken, a counter C ranging from 1 to 1000 is added as "_POS_C" until the new key is not taken
+' will disable any emulations in this DictCollection
+' will copy all other settings to new DictCollection
+Public Function FlattenToNew() As DictCollection
+    Dim Options As WalkDictCollectionTreeOptions: Options.Flatten = True: Options.EnsureKeys = True
+    Dim TargetCollection As New DictCollection
+    walkDictCollectionTree Options, , TargetCollection
+    Set FlattenToNew = TargetCollection
+End Function
+
+' restores all flattened subcollections in this DictCollection
+' chainable (returns this DictCollection)
+Public Function Unflatten() As DictCollection
+    Dim Options As WalkDictCollectionTreeOptions: Options.Unflatten = True
+    walkDictCollectionTree Options
+    Set Unflatten = Me
+End Function
+
+' restores all flattened subcollections to a new DictCollection
+Public Function UnflattenToNew() As DictCollection
+    Dim TargetCollection As New DictCollection
     Dim Options As WalkDictCollectionTreeOptions: Options.Unflatten = True
     walkDictCollectionTree Options, , TargetCollection
+    Set UnflattenToNew = TargetCollection
 End Function
 
-' makes a deep copy of all keys/items and subcollections
-' if a non-nothing TargetCollection is passed, all items and subcollections will be cloned to that TargetCollection without removing its existing items
+' makes a deep copy of all keys/items and subcollections to new DictCollection, also copies settings
 ' Variant object pointers and Objects as items/keys are replicated as pointers and will still point to the same object after cloning
-Public Function Clone(Optional TargetCollection As DictCollection) As DictCollection
-    Dim Options As WalkDictCollectionTreeOptions, newDictCollection As DictCollection
-    If TargetCollection Is Nothing Then
-        Set newDictCollection = New DictCollection
-    Else
-        Set newDictCollection = TargetCollection
-    End If
-    Options.Clone = True
-    walkDictCollectionTree Options, , newDictCollection
-    Set Clone = newDictCollection
+Public Function CloneToNew() As DictCollection
+    Dim Options As WalkDictCollectionTreeOptions: Options.Clone = True
+    Dim TargetCollection As New DictCollection
+    walkDictCollectionTree Options, , TargetCollection ' will also copy settings
+    Set CloneToNew = TargetCollection
+End Function
+
+' makes a deep copy of all keys/items and subcollections, also copies settings
+' chainable (returns this DictCollection)
+' Variant object pointers and Objects as items/keys are replicated as pointers and will still point to the same object after cloning
+Public Function CloneTo(TargetCollection As DictCollection) As DictCollection
+    Dim Options As WalkDictCollectionTreeOptions: Options.Clone = True
+    TargetCollection.RemoveAll
+    walkDictCollectionTree Options, , TargetCollection ' will also copy settings
+    Set CloneTo = Me
+End Function
+
+' makes a deep copy of all keys/items and subcollections but keeps existing keys/items/settings
+' chainable (returns this DictCollection)
+' Variant object pointers and Objects as items/keys are replicated as pointers and will still point to the same object after cloning
+Public Function CloneToPreserve(TargetCollection As DictCollection) As DictCollection
+    Dim Options As WalkDictCollectionTreeOptions: Options.Clone = True
+    Dim tmpDictCollection As New DictCollection
+    Me.CopyAllSettingsExceptCollectionType TargetCollection, tmpDictCollection
+    walkDictCollectionTree Options, , TargetCollection ' will temporarily copy settings
+    Me.CopyAllSettingsExceptCollectionType tmpDictCollection, TargetCollection
+    Set CloneToPreserve = Me
 End Function
 
 ' returns a DictCollection containing these keys:
@@ -2999,7 +3083,7 @@ Friend Function walkDictCollectionTree(Options As WalkDictCollectionTreeOptions,
     If mItemCount < 1 Then GoTo ExitFunction ' exit if nothing to do
         
     If (Options.EnsureKeys Or Options.Unflatten) And toTargetCollection Then
-        Set SourceCollection = Me.CopyItems ' make safety copy, will also copy settings if called like this
+        Set SourceCollection = Me.CopyItemsToNew ' make safety copy, will also copy settings if called like this
     Else
         Set SourceCollection = Me
     End If
@@ -3802,8 +3886,9 @@ Public Function TestFunctionality(Optional DebugPrint As Boolean = True) As Vari
     
     combineAndPrintTestErrors "Basic Functionality", testBasicFunctionality(False), allErrors, DebugPrint
     combineAndPrintTestErrors "Advanced Item And Key Access", testAdvancedItemAndKeyAccess(False), allErrors, DebugPrint
-    combineAndPrintTestErrors "Advanced Functionality", testAdvancedFunctionality(False), allErrors, DebugPrint
-    combineAndPrintTestErrors "Utility Functionality", testUtilFunctionality(False), allErrors, DebugPrint
+    combineAndPrintTestErrors "Advanced Functionality 1", testAdvancedFunctionality1(False), allErrors, DebugPrint
+    combineAndPrintTestErrors "Advanced Functionality 2", testAdvancedFunctionality2(False), allErrors, DebugPrint
+    combineAndPrintTestErrors "Utility Functions", testUtilFunctions(False), allErrors, DebugPrint
     combineAndPrintTestErrors "Bugfixes and Workarounds", testFixes(False), allErrors, DebugPrint
     
     If DebugPrint Then Debug.Print "----------- End DictCollection Functionality Test ------------------------------"
@@ -5185,550 +5270,12 @@ ExitFunction:
 End Function
 
 ' Tests advanced functionality (DebugPrint=True -> print errors immediately)
-Private Function testAdvancedFunctionality(Optional DebugPrint As Boolean = False) As Variant
+Private Function testAdvancedFunctionality1(Optional DebugPrint As Boolean = False) As Variant
     On Error GoTo Fail: Err.Clear
     Dim errors As Variant, dc1 As DictCollection, dc2 As DictCollection, dc3 As DictCollection, currentTest As String
     Dim i As Long, j As Long, Items As Variant, Keys As Variant, testdata As Variant, Val As Variant
     errors = Array()
     
-    
-    For i = 1 To 4
-        Set dc1 = New DictCollection: Set dc2 = New DictCollection
-If i = 1 Then currentTest = "[MATCHKNEW-1A] MatchKeysToNew must copy settings if nothing to drop and empty source DictCollection"
-If i = 2 Then dc1.Add "x", 1: currentTest = "[MATCHKNEW-1B] MatchKeysToNew must copy settings if nothing to drop and filled source DictCollection"
-If i = 3 Then Keys = Array("x"): currentTest = "[MATCHKNEW-1C] MatchKeysToNew must copy settings if empty source DictCollection"
-If i = 4 Then dc1.Add "x", 1: Keys = Array("x"): currentTest = "[MATCHKNEW-1D] MatchKeysToNew must copy settings if filled source DictCollection"
-        dc1.EmulateCollection = True
-        dc1.DefaultValueEnabled = False
-        dc1.EmptyCollectionValue = "empty"
-        dc1.NonExistingValue = #1/1/2000#
-        dc1.LazySorting = False
-        dc1.ZeroBasedIndex = False
-        dc1.CompareMode = vbTextCompare
-        dc1.ThrowErrors = True
-        ' filter
-        Set dc2 = dc1.MatchKeysToNew(Array())
-        ' tests
-        If dc2.EmulateCollection <> True Or dc2.DefaultValueEnabled <> False Or dc2.EmptyCollectionValue <> "empty" Then logError DebugPrint, errors, ("-> " & currentTest)
-        If dc2.NonExistingValue <> #1/1/2000# Or dc2.LazySorting <> False Or dc2.ZeroBasedIndex <> False Then logError DebugPrint, errors, ("-> " & currentTest)
-        If dc2.CompareMode <> vbTextCompare Or dc2.ThrowErrors <> True Then logError DebugPrint, errors, ("-> " & currentTest)
-    Next
-currentTest = "[MATCHKNEW-2] MatchKeysToNew must return empty DictCollection if there is nothing to match"
-    Set dc1 = New DictCollection: Set dc2 = New DictCollection
-    dc1.Add("a", 1).Add("b", 2).Add(, 2.5).Add "c", 3
-    Set dc2 = dc1.MatchKeysToNew(Array())
-    If dc2.Count <> 0 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection must be empty")
-currentTest = "[MATCHKNEW-3A] MatchKeysToNew must find exact matches with case-sensitive matching"
-    Set dc1 = New DictCollection: Set dc2 = New DictCollection
-    dc1.Add("a", 1).Add("b", 2).Add(, 2.5).Add "c", 3
-    Set dc2 = dc1.MatchKeysToNew(Array("a", "B"), "?", vbBinaryCompare)
-    If dc2.Count <> 2 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has icorrect item count")
-    If dc2.KeyOfItemAt(0) <> "a" Or dc2.ItemOf(0) = 1 Or dc2.KeyOfItemAt(1) <> "B" Or dc2.ItemOf(1) = "?" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection contains incorrect keys/items")
-currentTest = "[MATCHKNEW-3B] MatchKeysToNew must find matches with case-insensitive matching"
-    Set dc1 = New DictCollection: Set dc2 = New DictCollection
-    dc1.Add("a", 1).Add("b", 2).Add(, 2.5).Add "c", 3
-    Set dc2 = dc1.MatchKeysToNew(Array("a", "B"), , vbTextCompare)
-    If dc2.Count <> 2 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect item count")
-    If dc2.KeyOfItemAt(0) <> "a" Or dc2.ItemOf(0) = 1 Or dc2.KeyOfItemAt(1) <> "B" Or dc2.ItemOf(1) = 2 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection contains incorrect keys/items")
-currentTest = "[MATCHKNEW-4] MatchKeysToNew must return all keys if nothing was found"
-    Set dc1 = New DictCollection: Set dc2 = New DictCollection
-    dc1.Add("x", 1).Add("_X_", 2).Add("_x", 3).Add "X_", 4
-    Set dc2 = dc1.MatchKeysToNew(Array("a", "b", "c"), -1, vbBinaryCompare)
-    If dc2.Count <> 3 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect item count")
-    If dc2.KeyOfItemAt(0) <> "a" Or dc2.ItemOf(0) = -1 Or dc2.KeyOfItemAt(1) <> "b" Or dc2.ItemOf(1) = -1 Or dc2.KeyOfItemAt(2) <> "c" Or dc2.ItemOf(2) = -1 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection contains incorrect keys/items")
-currentTest = "[MATCHKNEW-5] MatchKeysToNew must clone matching SubCollections"
-    Set dc1 = New DictCollection: Set dc2 = New DictCollection
-    dc1.AddDC("x").Add "a", 1
-    dc1.AddDC("y").Add "b", 2
-    Set dc2 = dc1.MatchKeysToNew(Array("y")) ' match SubCollection 'y'
-    dc1.AsDC("y").RemoveAll ' empty source SubCollection, must not affect cloned SubCollection
-    If dc2.Count <> 1 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect item number")
-    If dc2.AsDC("y").Count <> 1 Or dc2.AsDC("y").KeyOfItemAt(0) <> "b" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect SubCollection")
-currentTest = "[MATCHKNEW-6] MatchKeysToNew must trow correct error if KeyArr is of invalid type"
-    Set dc1 = New DictCollection: Set dc2 = New DictCollection
-    dc1.ThrowErrors = True
-    testdata = Array(CInt(1), CDbl(1#), "text", New DictCollection)
-    On Error Resume Next
-    For i = 0 To UBound(testdata)
-        Err.Clear: Set dc2 = dc1.MatchKeysToNew(testdata(i)): If Err.Number <> 13 Then logError DebugPrint, errors, ("-> " & currentTest & ": KeyArr of Type " & TypeName(testdata(i)) & " must throw Error 13")
-    Next
-    On Error GoTo Fail: Err.Clear
-       
-    For i = 1 To 4
-        Set dc1 = New DictCollection: Set dc2 = New DictCollection
-If i = 1 Then currentTest = "[KEEPKNEW-1A] KeepKeysToNew must copy settings if nothing to drop and empty source DictCollection"
-If i = 2 Then dc1.Add "x", 1: currentTest = "[KEEPKNEW-1B] KeepKeysToNew must copy settings if nothing to drop and filled source DictCollection"
-If i = 3 Then Keys = Array("x"): currentTest = "[KEEPKNEW-1C] KeepKeysToNew must copy settings if empty source DictCollection"
-If i = 4 Then dc1.Add "x", 1: Keys = Array("x"): currentTest = "[KEEPKNEW-1D] KeepKeysToNew must copy settings if filled source DictCollection"
-        dc1.EmulateCollection = True
-        dc1.DefaultValueEnabled = False
-        dc1.EmptyCollectionValue = "empty"
-        dc1.NonExistingValue = #1/1/2000#
-        dc1.LazySorting = False
-        dc1.ZeroBasedIndex = False
-        dc1.CompareMode = vbTextCompare
-        dc1.ThrowErrors = True
-        ' filter
-        Set dc2 = dc1.KeepKeysToNew(Array())
-        ' tests
-        If dc2.EmulateCollection <> True Or dc2.DefaultValueEnabled <> False Or dc2.EmptyCollectionValue <> "empty" Then logError DebugPrint, errors, ("-> " & currentTest)
-        If dc2.NonExistingValue <> #1/1/2000# Or dc2.LazySorting <> False Or dc2.ZeroBasedIndex <> False Then logError DebugPrint, errors, ("-> " & currentTest)
-        If dc2.CompareMode <> vbTextCompare Or dc2.ThrowErrors <> True Then logError DebugPrint, errors, ("-> " & currentTest)
-    Next
-currentTest = "[KEEPKNEW-2] KeepKeysToNew must return empty DictCollection if there is nothing to keep"
-    Set dc1 = New DictCollection: Set dc2 = New DictCollection
-    dc1.Add("a", 1).Add("b", 2).Add(, 2.5).Add "c", 3
-    Set dc2 = dc1.KeepKeysToNew(Array())
-    If dc2.Count <> 0 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection must be empty")
-currentTest = "[KEEPKNEW-3A] KeepKeysToNew must keep exact matches with case-sensitive matching"
-    Set dc1 = New DictCollection: Set dc2 = New DictCollection
-    dc1.Add("a", 1).Add("b", 2).Add(, 2.5).Add "c", 3
-    Set dc2 = dc1.KeepKeysToNew(Array("a", "B"), , vbBinaryCompare)
-    If dc2.Count <> 1 Or dc2.KeyOfItemAt(0) <> "a" Or dc2.ItemOf(0) = 1 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection contains incorrect key/item")
-currentTest = "[KEEPKNEW-3B] KeepKeysToNew must keep exact matches with case-insensitive matching"
-    Set dc1 = New DictCollection: Set dc2 = New DictCollection
-    dc1.Add("a", 1).Add("b", 2).Add(, 2.5).Add "c", 3
-    Set dc2 = dc1.KeepKeysToNew(Array("a", "B"), , vbTextCompare)
-    If dc2.Count <> 2 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect item count")
-    If dc2.KeyAtKeyIndex(0) <> "a" Or dc2.KeyAtKeyIndex(1) <> "b" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection keys are incorrect")
-    If dc2.ItemAt(0) <> 1 Or dc2.ItemAt(1) <> 2 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection items are incorrect")
-currentTest = "[KEEPKNEW-4A] KeepKeysToNew must keep matching wildcards with case-sensitive matching"
-    Set dc1 = New DictCollection: Set dc2 = New DictCollection
-    dc1.Add("x", 1).Add("_X_", 2).Add("_x", 3).Add "X_", 4
-    ' keep everything that contains "X"
-    Set dc2 = dc1.KeepKeysToNew(Array("*X*"), True, vbBinaryCompare)
-    If dc2.Count <> 2 Or dc2.KeyOfItemAt(0) <> "_X_" Or dc2.KeyOfItemAt(1) <> "X_" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect keys")
-    ' keep everything that starts with "X"
-    Set dc2 = dc1.KeepKeysToNew(Array("X*"), True, vbBinaryCompare)
-    If dc2.Count <> 1 Or dc2.KeyOfItemAt(0) <> "X_" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect keys")
-    ' keep everything that ends with "x"
-    Set dc2 = dc1.KeepKeysToNew(Array("*x"), True, vbBinaryCompare)
-    If dc2.Count <> 2 Or dc2.KeyOfItemAt(0) <> "x" Or dc2.KeyOfItemAt(1) <> "_x" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect keys")
-currentTest = "[KEEPKNEW-4B] KeepKeysToNew must keep matching wildcards with case-insensitive matching"
-    Set dc1 = New DictCollection: Set dc2 = New DictCollection
-    dc1.Add("x", 1).Add("_X_", 2).Add("_X", 3).Add "X_", 4
-    ' keep everything that contains "X" or "x"
-    Set dc2 = dc1.KeepKeysToNew(Array("*X*"), True, vbTextCompare)
-    If dc2.Count <> 4 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect keys")
-    ' keep everything that starts with "X" or "x"
-    Set dc2 = dc1.KeepKeysToNew(Array("x*"), True, vbTextCompare)
-    If dc2.Count <> 2 Or dc2.KeyOfItemAt(0) <> "x" Or dc2.KeyOfItemAt(1) <> "X_" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect keys")
-    ' keep everything that ends with "X" or "x" or matches "_*_"
-    Set dc2 = dc1.KeepKeysToNew(Array("*x", "_*_"), True, vbTextCompare)
-    If dc2.Count <> 3 Or dc2.KeyOfItemAt(0) <> "x" Or dc2.KeyOfItemAt(1) <> "_X_" Or dc2.KeyOfItemAt(2) <> "_X" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect keys")
-currentTest = "[KEEPKNEW-5] KeepKeysToNew must clone non-matching SubCollections"
-    Set dc1 = New DictCollection: Set dc2 = New DictCollection
-    dc1.AddDC("x").Add "a", 1
-    dc1.AddDC("y").Add "b", 2
-    Set dc2 = dc1.KeepKeysToNew(Array("y")) ' keep SubCollection 'y'
-    dc1.AsDC("y").RemoveAll ' empty source SubCollection, must not affect cloned SubCollection
-    If dc2.Count <> 1 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect item number")
-    If dc2.AsDC("y").Count <> 1 Or dc2.AsDC("y").KeyOfItemAt(0) <> "b" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect SubCollection")
-currentTest = "[KEEPKNEW-6] KeepKeysToNew must trow correct error if KeyArr is of invalid type"
-    Set dc1 = New DictCollection: Set dc2 = New DictCollection
-    dc1.ThrowErrors = True
-    testdata = Array(CInt(1), CDbl(1#), "text", New DictCollection)
-    On Error Resume Next
-    For i = 0 To UBound(testdata)
-        Err.Clear: Set dc2 = dc1.KeepKeysToNew(testdata(i)): If Err.Number <> 13 Then logError DebugPrint, errors, ("-> " & currentTest & ": KeyArr of Type " & TypeName(testdata(i)) & " must throw Error 13")
-    Next
-    On Error GoTo Fail: Err.Clear
-    
-    For i = 1 To 4
-        Set dc1 = New DictCollection: Set dc2 = New DictCollection
-If i = 1 Then currentTest = "[DROPKNEW-1A] DropKeysToNew must copy settings if nothing to drop and empty source DictCollection"
-If i = 2 Then dc1.Add "x", 1: currentTest = "[DROPKNEW-1B] DropKeysToNew must copy settings if nothing to drop and filled source DictCollection"
-If i = 3 Then Keys = Array("x"): currentTest = "[DROPKNEW-1C] DropKeysToNew must copy settings if empty source DictCollection"
-If i = 4 Then dc1.Add "x", 1: Keys = Array("x"): currentTest = "[DROPKNEW-1D] DropKeysToNew must copy settings if filled source DictCollection"
-        dc1.EmulateCollection = True
-        dc1.DefaultValueEnabled = False
-        dc1.EmptyCollectionValue = "empty"
-        dc1.NonExistingValue = #1/1/2000#
-        dc1.LazySorting = False
-        dc1.ZeroBasedIndex = False
-        dc1.CompareMode = vbTextCompare
-        dc1.ThrowErrors = True
-        ' filter
-        Set dc2 = dc1.DropKeysToNew(Array())
-        ' tests
-        If dc2.EmulateCollection <> True Or dc2.DefaultValueEnabled <> False Or dc2.EmptyCollectionValue <> "empty" Then logError DebugPrint, errors, ("-> " & currentTest)
-        If dc2.NonExistingValue <> #1/1/2000# Or dc2.LazySorting <> False Or dc2.ZeroBasedIndex <> False Then logError DebugPrint, errors, ("-> " & currentTest)
-        If dc2.CompareMode <> vbTextCompare Or dc2.ThrowErrors <> True Then logError DebugPrint, errors, ("-> " & currentTest)
-    Next
-currentTest = "[DROPKNEW-2] DropKeysToNew must clone all items with keys if nothing to drop"
-    Set dc1 = New DictCollection: Set dc2 = New DictCollection
-    dc1.Add("a", 1).Add("b", 2).Add(, 2.5).Add "c", 3
-    ' filter
-    Set dc2 = dc1.DropKeysToNew(Array())
-    ' tests
-    If dc2.Count <> 3 Or dc2.KeyCount <> 3 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection .Count=" & dc2.Count & " must be " & 3 & " and .KeyCount=" & dc2.KeyCount & " must be 3")
-    If dc2.KeyAtKeyIndex(0) <> "a" Or dc2.KeyAtKeyIndex(1) <> "b" Or dc2.KeyAtKeyIndex(2) <> "c" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection keys are incorrect")
-    If dc2.ItemAt(0) <> 1 Or dc2.ItemAt(1) <> 2 Or dc2.ItemAt(2) <> 3 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection items are incorrect")
-currentTest = "[DROPKNEW-3A] DropKeysToNew must drop exact matches with case-sensitive matching"
-    Set dc1 = New DictCollection: Set dc2 = New DictCollection
-    dc1.Add("a", 1).Add("b", 2).Add(, 2.5).Add "c", 3
-    Set dc2 = dc1.DropKeysToNew(Array("B"), , vbBinaryCompare)
-    If dc2.Count <> 3 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection .Count=" & dc2.Count & " must be " & 3)
-    If dc2.KeyAtKeyIndex(0) <> "a" Or dc2.KeyAtKeyIndex(1) <> "b" Or dc2.KeyAtKeyIndex(2) <> "c" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection keys are incorrect")
-    If dc2.ItemAt(0) <> 1 Or dc2.ItemAt(1) <> 2 Or dc2.ItemAt(2) <> 3 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection items are incorrect")
-currentTest = "[DROPKNEW-3B] DropKeysToNew must drop exact matches with case-insensitive matching"
-    Set dc1 = New DictCollection: Set dc2 = New DictCollection
-    dc1.Add("a", 1).Add("b", 2).Add(, 2.5).Add "c", 3
-    Set dc2 = dc1.DropKeysToNew(Array("B"), , vbTextCompare)
-    If dc2.Count <> 2 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection .Count=" & dc2.Count & " must be " & 2)
-    If dc2.KeyAtKeyIndex(0) <> "a" Or dc2.KeyAtKeyIndex(1) <> "c" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection keys are incorrect")
-    If dc2.ItemAt(0) <> 1 Or dc2.ItemAt(1) <> 3 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection items are incorrect")
-currentTest = "[DROPKNEW-4A] DropKeysToNew must drop matching wildcards with case-sensitive matching"
-    Set dc1 = New DictCollection: Set dc2 = New DictCollection
-    dc1.Add("x", 1).Add("_X_", 2).Add("_x", 3).Add "X_", 4
-    ' drop everything that contains "X"
-    Set dc2 = dc1.DropKeysToNew(Array("*X*"), True, vbBinaryCompare)
-    If dc2.Count <> 2 Or dc2.KeyOfItemAt(0) <> "x" Or dc2.KeyOfItemAt(1) <> "_x" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect keys")
-    ' drop everything that starts with "X"
-    Set dc2 = dc1.DropKeysToNew(Array("X*"), True, vbBinaryCompare)
-    If dc2.Count <> 3 Or dc2.KeyOfItemAt(0) <> "x" Or dc2.KeyOfItemAt(1) <> "_X_" Or dc2.KeyOfItemAt(2) <> "_x" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect keys")
-    ' drop everything that ends with "x"
-    Set dc2 = dc1.DropKeysToNew(Array("*x"), True, vbBinaryCompare)
-    If dc2.Count <> 2 Or dc2.KeyOfItemAt(0) <> "_X_" Or dc2.KeyOfItemAt(1) <> "X_" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect keys")
-currentTest = "[DROPKNEW-4B] DropKeysToNew must drop matching wildcards with case-insensitive matching"
-    Set dc1 = New DictCollection: Set dc2 = New DictCollection
-    dc1.Add("x", 1).Add("_X_", 2).Add("_X", 3).Add "X_", 4
-    ' drop everything that contains "X" or "x"
-    Set dc2 = dc1.DropKeysToNew(Array("*X*"), True, vbTextCompare)
-    If dc2.Count <> 0 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection must be empty")
-    ' drop everything that starts with "X" or "x"
-    Set dc2 = dc1.DropKeysToNew(Array("x*"), True, vbTextCompare)
-    If dc2.Count <> 2 Or dc2.KeyOfItemAt(0) <> "_X_" Or dc2.KeyOfItemAt(1) <> "_X" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect keys")
-    ' drop everything that ends with "X" or "x" or matches "_*_"
-    Set dc2 = dc1.DropKeysToNew(Array("*x", "_*_"), True, vbTextCompare)
-    If dc2.Count <> 1 Or dc2.KeyOfItemAt(0) <> "X_" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect keys")
-currentTest = "[DROPKNEW-5] DropKeysToNew must clone non-matching SubCollections"
-    Set dc1 = New DictCollection: Set dc2 = New DictCollection
-    dc1.AddDC("x").Add "a", 1
-    dc1.AddDC("y").Add "b", 2
-    Set dc2 = dc1.DropKeysToNew(Array("x")) ' drop SubCollection 'x'
-    dc1.AsDC("y").RemoveAll ' empty source SubCollection, must not affect cloned SubCollection
-    If dc2.Count <> 1 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect item number")
-    If dc2.AsDC("y").Count <> 1 Or dc2.AsDC("y").KeyOfItemAt(0) <> "b" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect SubCollection")
-currentTest = "[DROPKNEW-6] DropKeysToNew must trow correct error if KeyArr is of invalid type"
-    Set dc1 = New DictCollection: Set dc2 = New DictCollection
-    dc1.ThrowErrors = True
-    testdata = Array(CInt(1), CDbl(1#), "text", New DictCollection)
-    On Error Resume Next
-    For i = 0 To UBound(testdata)
-        Err.Clear: Set dc2 = dc1.DropKeysToNew(testdata(i)): If Err.Number <> 13 Then logError DebugPrint, errors, ("-> " & currentTest & ": KeyArr of Type " & TypeName(testdata(i)) & " must throw Error 13")
-    Next
-    On Error GoTo Fail: Err.Clear
-
-For i = 1 To 2
-    If i = 1 Then
-currentTest = "[CLONE-1A] Clone without argument TargetCollection must copy all settings correctly"
-    Else
-currentTest = "[CLONE-1B] Clone to TargetCollection must copy all settings correctly"
-    End If
-    Set dc1 = New DictCollection: Set dc2 = New DictCollection
-    dc1.EmulateCollection = True
-    dc1.DefaultValueEnabled = False
-    dc1.EmptyCollectionValue = "empty"
-    dc1.NonExistingValue = #1/1/2000#
-    dc1.LazySorting = False
-    dc1.ZeroBasedIndex = False
-    dc1.CompareMode = vbTextCompare
-    dc1.ThrowErrors = True
-    ' clone for case A and case B
-    If i = 1 Then Set dc2 = dc1.Clone Else dc1.Clone dc2
-    ' tests
-    If dc2.EmulateCollection <> True Or dc2.DefaultValueEnabled <> False Or dc2.EmptyCollectionValue <> "empty" Then logError DebugPrint, errors, ("-> " & currentTest)
-    If dc2.NonExistingValue <> #1/1/2000# Or dc2.LazySorting <> False Or dc2.ZeroBasedIndex <> False Then logError DebugPrint, errors, ("-> " & currentTest)
-    If dc2.CompareMode <> vbTextCompare Or dc2.ThrowErrors <> True Then logError DebugPrint, errors, ("-> " & currentTest)
-    If i = 1 Then
-currentTest = "[CLONE-2A] Clone without argument TargetCollection must copy all values"
-    Else
-currentTest = "[CLONE-2B] Clone to TargetCollection must copy all values"
-    End If
-    Set dc1 = New DictCollection: Set dc2 = New DictCollection: Set dc3 = New DictCollection: dc3.DefaultValueEnabled = False
-    testdata = Array(Array(Empty, Empty), Array("1", CInt(1)), Array("2", CLng(2)), Array("3", CSng(3.5)), Array("4", CDbl(4.5)), Array("5", CCur(5)), Array("6", CDec(6)), Array("7", "") _
-    , Array("8", "x"), Array("9", dc3), Array("10", Null), Array("11", CVErr(11)), Array("12", Nothing)) ' valid DictColletion value types
-    For j = 0 To UBound(testdata)
-        dc1.Add testdata(j)(0), testdata(j)(1)
-    Next
-    ' clone for case A and case B
-    If i = 1 Then Set dc2 = dc1.Clone Else dc1.Clone dc2
-    ' test
-    Items = dc2.Items: Keys = dc2.Keys
-    For j = 0 To UBound(testdata)
-        ' test items for equality
-        Select Case TypeName(testdata(j)(1))
-            Case "Nothing": If TypeName(Items(j)) <> "Nothing" Then logError DebugPrint, errors, ("-> " & currentTest)
-            Case "DictCollection":
-                If TypeName(Items(j)) <> "DictCollection" Then
-                    logError DebugPrint, errors, ("-> " & currentTest)
-                Else
-                    ' cloned DictCollection has to be a different object
-                    ' otherwise manipulating items in the original subcollection will affect the cloned one
-                    If Items(j) Is testdata(j)(1) Then logError DebugPrint, errors, ("-> " & currentTest)
-                End If
-            Case Else:
-                If TypeName(Items(j)) <> TypeName(testdata(j)(1)) Then
-                    logError DebugPrint, errors, ("-> " & currentTest)
-                Else
-                    If Items(j) <> testdata(j)(1) Then logError DebugPrint, errors, ("-> " & currentTest)
-                End If
-        End Select
-        ' test keys for equality
-        If Keys(j) <> testdata(j)(0) Then logError DebugPrint, errors, ("-> " & currentTest)
-    Next
-    If i = 1 Then
-currentTest = "[CLONE-3A] Clone without argument TargetCollection must replicate subcollection structure"
-    Else
-currentTest = "[CLONE-3B] Clone to TargetCollection must must replicate subcollection structure"
-    End If
-    Set dc1 = New DictCollection: Set dc2 = New DictCollection: Set dc3 = Nothing
-    dc1.AddDC("a").Add("a1", 1).Add "a2", 2 ' SubCollection "a" contains two values
-    dc1.AddDC("b").Add("b1", 3).Add("b2", 4).AddDC "b3" ' SubCollection "b" contains two values and an empty SubCollection
-    dc1.AddDC("c").AddDC.AddDC ' SubCollection "c" contains a SubCollection that contains an empty SubCollection
-    ' clone for case A and case B
-    If i = 1 Then Set dc2 = dc1.Clone Else dc1.Clone dc2
-    If Not dc2.Count = dc1.Count Then logError DebugPrint, errors, ("-> " & currentTest & ": cloned collection must have item count = " & dc1.Count)
-    If Not dc2.KeyCount = dc1.KeyCount Then logError DebugPrint, errors, ("-> " & currentTest & ": cloned collection key count must be " & dc1.KeyCount)
-    If TypeName(dc2(0)) <> "DictCollection" Or TypeName(dc2(1)) <> "DictCollection" Or TypeName(dc2(2)) <> "DictCollection" Then logError DebugPrint, errors, ("-> " & currentTest & ": cloned collection items must be of type DictCollection")
-    If dc2.AsDC("a")("a1") <> 1 Or dc2.AsDC("a")("a2") <> 2 Then logError DebugPrint, errors, ("-> " & currentTest & ": cloned SubCollection 'a' items must have same values as source SubCollection")
-    If dc2.AsDC("b")("b1") <> 3 Or dc2.AsDC("b")("b2") <> 4 Then logError DebugPrint, errors, ("-> " & currentTest & ": cloned SubCollection 'b' items must have same values as source SubCollection")
-    If TypeName(dc2.AsDC("b")("b3")) <> "DictCollection" Then
-        logError DebugPrint, errors, ("-> " & currentTest & ": cloned SubCollection 'b' item 'b3' must be of type SubCollection")
-    Else
-        If dc2.AsDC("b").AsDC("b3").Count <> 0 Then logError DebugPrint, errors, ("-> " & currentTest & ": cloned SubCollection 'b' item 'b3' must be empty SubCollection")
-    End If
-    If TypeName(dc2.AsDC("c")(0)) <> "DictCollection" Then
-        logError DebugPrint, errors, ("-> " & currentTest & ": cloned SubCollection 'c' must have SubCollection")
-    Else
-        If dc2.AsDC("c").AsDC(0).Count <> 1 Then
-            logError DebugPrint, errors, ("-> " & currentTest & ": cloned SubCollection 'c' must have SubCollection with item count = 1")
-        Else
-            Set dc3 = dc2.AddDC("c").AsDC(0)(0)
-            If TypeName(dc3) <> "DictCollection" Then
-                logError DebugPrint, errors, ("-> " & currentTest & ": cloned SubCollection 'c' first SubCollection must have SubCollection")
-            Else
-                If dc3.Count <> 0 Then logError DebugPrint, errors, ("-> " & currentTest & ": cloned SubCollection 'c' first SubCollection must have SubCollection that is empty")
-            End If
-        End If
-    End If
-    If i = 1 Then
-currentTest = "[CLONE-4A] Clone must replicate all key types with .EmulateDictionary=True"
-    Else
-currentTest = "[CLONE-4B] Clone to TargetCollection must replicate all key types with .EmulateDictionary=True"
-    End If
-    Set dc1 = New DictCollection: dc1.EmulateDictionary = True: Set dc2 = New DictCollection
-    testdata = Array(CInt(1), CLng(2), CSng(3.5), CDbl(4.5), CCur(5), CDec(6), "", "x", UtilGetMissingValue, dc2, Null, CVErr(11), Nothing) ' valid Dictionary key types
-    For j = 0 To UBound(testdata): dc1.Add testdata(j), j: Next
-    ' clone for case A and case B
-    If i = 1 Then Set dc2 = dc1.Clone Else dc1.Clone dc2
-    If Not dc2.EmulateDictionary Then logError DebugPrint, errors, ("-> " & currentTest & ": cloned DictCollection must have .EmulateDictionary=True")
-    For j = 0 To UBound(testdata)
-        If Not dc2.Exists(testdata(j)) Then
-            logError DebugPrint, errors, ("-> " & currentTest & ": cloned DictCollection must contain key '" & testdata(j) & "'")
-        Else
-            If TypeName(dc2.KeyOfItemAt(j)) <> TypeName(testdata(j)) Then logError DebugPrint, errors, ("-> " & currentTest & ": key at " & j & " must have type '" & TypeName(testdata(j)) & "'")
-            If dc2.Item(testdata(j)) <> j Then logError DebugPrint, errors, ("-> " & currentTest & ": item at " & j & " must have value " & j)
-        End If
-    Next
-Next
-
-currentTest = "[COPY-1] CopyItems must copy all settings if called without arguments"
-    Set dc1 = New DictCollection:
-    dc1.EmulateDictionary = True
-    dc1.ThrowErrors = False
-    dc1.DefaultValueEnabled = True
-    dc1.ZeroBasedIndex = True
-    dc1.EmptyCollectionValue = "a"
-    dc1.NonExistingValue = "b"
-    dc1.CompareMode = 3 ' database
-    Set dc2 = dc1.CopyItems
-    If dc2.ThrowErrors <> False Or dc2.DefaultValueEnabled <> True Then logError DebugPrint, errors, ("-> " & currentTest)
-        If dc2.ZeroBasedIndex <> True Then logError DebugPrint, errors, ("-> " & currentTest)
-        If TypeName(dc2.EmptyCollectionValue) <> "String" Or dc2.EmptyCollectionValue <> "a" Then logError DebugPrint, errors, ("-> " & currentTest)
-        If TypeName(dc2.NonExistingValue) <> "String" Or dc2.NonExistingValue <> "b" Then logError DebugPrint, errors, ("-> " & currentTest)
-        If dc2.CompareMode <> 3 Then logError DebugPrint, errors, ("-> " & currentTest)
-currentTest = "[COPY-2] CopyItems must copy items and keys"
-    Set dc1 = New DictCollection: dc1.Add , "A": dc1.Add "b", "B": dc1.Insert "C", 3, "c"
-    Set dc2 = dc1.CopyItems ' copy without arguments
-    Keys = dc2.Keys: If Keys(0) <> Empty Or Keys(1) <> "b" Or Keys(2) <> Empty Or Keys(3) <> "c" Then logError DebugPrint, errors, ("-> " & currentTest)
-    Items = dc2.Items: If Items(0) <> "A" Or Items(1) <> "B" Or Items(2) <> Empty Or Items(3) <> "C" Then logError DebugPrint, errors, ("-> " & currentTest)
-    Set dc2 = New DictCollection: dc1.CopyItems , dc2 ' copy by argument
-    Keys = dc2.Keys: If Keys(0) <> Empty Or Keys(1) <> "b" Or Keys(2) <> Empty Or Keys(3) <> "c" Then logError DebugPrint, errors, ("-> " & currentTest)
-    Items = dc2.Items: If Items(0) <> "A" Or Items(1) <> "B" Or Items(2) <> Empty Or Items(3) <> "C" Then logError DebugPrint, errors, ("-> " & currentTest)
-    Set dc2 = New DictCollection:  DictCollection.CopyItems dc1, dc2 ' copy with static function
-    Keys = dc2.Keys: If Keys(0) <> Empty Or Keys(1) <> "b" Or Keys(2) <> Empty Or Keys(3) <> "c" Then logError DebugPrint, errors, ("-> " & currentTest)
-    Items = dc2.Items: If Items(0) <> "A" Or Items(1) <> "B" Or Items(2) <> Empty Or Items(3) <> "C" Then logError DebugPrint, errors, ("-> " & currentTest)
-currentTest = "[COPY-3] CopyItems must copy items and keys to given TargetIndex"
-    Set dc1 = New DictCollection: dc1.Add , "A": dc1.Add "b", "B": dc1.Insert "C", 3, "c"
-    Set dc2 = New DictCollection
-    Set dc2 = dc1.CopyItems(, , 1) ' copy without arguments
-    Keys = dc2.Keys: If Keys(0) <> Empty Or Keys(1) <> Empty Or Keys(2) <> "b" Or Keys(3) <> Empty Or Keys(4) <> "c" Then logError DebugPrint, errors, ("-> " & currentTest)
-    Items = dc2.Items: If Items(0) <> Empty Or Items(1) <> "A" Or Items(2) <> "B" Or Items(3) <> Empty Or Items(4) <> "C" Then logError DebugPrint, errors, ("-> " & currentTest)
-    Set dc2 = New DictCollection: dc1.CopyItems , dc2, 1 ' copy by argument
-    Keys = dc2.Keys: If Keys(0) <> Empty Or Keys(1) <> Empty Or Keys(2) <> "b" Or Keys(3) <> Empty Or Keys(4) <> "c" Then logError DebugPrint, errors, ("-> " & currentTest)
-    Items = dc2.Items: If Items(0) <> Empty Or Items(1) <> "A" Or Items(2) <> "B" Or Items(3) <> Empty Or Items(4) <> "C" Then logError DebugPrint, errors, ("-> " & currentTest)
-    Set dc2 = New DictCollection:  DictCollection.CopyItems dc1, dc2, 1 ' copy with static function
-    Keys = dc2.Keys: If Keys(0) <> Empty Or Keys(1) <> Empty Or Keys(2) <> "b" Or Keys(3) <> Empty Or Keys(4) <> "c" Then logError DebugPrint, errors, ("-> " & currentTest)
-    Items = dc2.Items: If Items(0) <> Empty Or Items(1) <> "A" Or Items(2) <> "B" Or Items(3) <> Empty Or Items(4) <> "C" Then logError DebugPrint, errors, ("-> " & currentTest)
-currentTest = "[COPY-4] CopyItems must copy items and keys to given TargetIndex with TargetCollection.ZeroBasedIndex=False"
-    Set dc1 = New DictCollection: dc1.Add , "A": dc1.Add "b", "B": dc1.Insert "C", 3, "c"
-    Set dc2 = New DictCollection: dc2.ZeroBasedIndex = False
-    dc1.CopyItems , dc2, 2 ' copy by argument
-    Keys = dc2.Keys: If Keys(0) <> Empty Or Keys(1) <> Empty Or Keys(2) <> "b" Or Keys(3) <> Empty Or Keys(4) <> "c" Then logError DebugPrint, errors, ("-> " & currentTest)
-    Items = dc2.Items: If Items(0) <> Empty Or Items(1) <> "A" Or Items(2) <> "B" Or Items(3) <> Empty Or Items(4) <> "C" Then logError DebugPrint, errors, ("-> " & currentTest)
-currentTest = "[COPY-5] CopyItems must copy object items"
-    Set dc1 = New DictCollection: dc1.SubDC(0).Add , 1: dc1.SubDC(1).Add , 2:
-    Set dc2 = dc1.CopyItems
-    If dc2.AsDC(0).Item(0) <> 1 Or dc2.AsDC(1).Item(0) <> 2 Then logError DebugPrint, errors, ("-> " & currentTest)
-    dc1.CopyItems , dc2, 3 ' copy to index=3, leaves existing items untouched and inserts an empty item at index=2
-    If dc2.AsDC(0).Item(0) <> 1 Or dc2.AsDC(1).Item(0) <> 2 Then logError DebugPrint, errors, ("-> " & currentTest)
-    If dc2.Item(2) <> Empty Or dc2.AsDC(3).Item(0) <> 1 Or dc2.AsDC(4).Item(0) <> 2 Then logError DebugPrint, errors, ("-> " & currentTest)
-currentTest = "[COPY-6] CopyItems must work with .EmulateDictionary=True"
-    Set dc1 = New DictCollection: dc1.EmulateDictionary = True
-    testdata = Array(CInt(1), CLng(2), CSng(3.5), CDbl(4.5), CCur(5), CDec(6), "", "x", UtilGetMissingValue, dc2, Null, CVErr(11), Nothing) ' valid Dictionary key types
-    For i = 0 To UBound(testdata): dc1.Add testdata(i), i: Next
-    Set dc2 = dc1.CopyItems
-    For i = 0 To UBound(testdata)
-        If Not dc2.Exists(testdata(i)) Then
-            UtilAddArrayValue errors, ("-> " & currentTest)
-        Else
-            If TypeName(dc2.KeyOfItemAt(i)) <> TypeName(testdata(i)) Then logError DebugPrint, errors, ("-> " & currentTest)
-            If dc2.Item(testdata(i)) <> i Then UtilAddArrayValue errors, ("-> " & currentTest)
-        End If
-    Next
-
-' 1st run: test with dc1, 2nd run: test with dc2 as TargetCollection
-For i = 1 To 2
-currentTest = "[FLAT-1] Flatten must replace empty and nonexisting DictCollections with .EmptyCollectionValue"
-    Set dc1 = New DictCollection: Set dc2 = New DictCollection
-    dc1.EmptyCollectionValue = "x"
-    dc1.AddDC ' empty
-    dc1.AddDC().CollectionType = 0 ' nonexisting
-    If i = 1 Then
-        dc1.Flatten: Items = dc1.Items: Keys = dc1.Keys
-    Else
-        dc1.Flatten dc2: Items = dc2.Items: Keys = dc2.Keys ' test with TargetCollection
-        If Not IsObject(dc1.Item(0)) Or Not IsObject(dc1.Item(1)) Then logError DebugPrint, errors, ("-> " & currentTest)
-    End If
-    If Items(0) <> dc1.EmptyCollectionValue Or Items(1) <> dc1.EmptyCollectionValue Then logError DebugPrint, errors, ("-> " & currentTest)
-currentTest = "[FLAT-2] Flatten must not change DictCollections with no SubCollections"
-    Set dc1 = New DictCollection: Set dc2 = New DictCollection
-    dc1.Add , 1: dc1.Add "a", "A": dc1.Item(3) = "B"
-    If i = 1 Then
-        dc1.Flatten: Items = dc1.Items: Keys = dc1.Keys
-    Else
-        dc1.Flatten dc2: Items = dc2.Items: Keys = dc2.Keys ' test with TargetCollection
-        If dc1.KeyOfItemAt(0) <> Empty Or dc1.KeyOfItemAt(3) <> Empty Then logError DebugPrint, errors, ("-> " & currentTest)
-    End If
-    If Keys(0) <> "_1" Or Keys(1) <> "a" Or Keys(2) <> "_3" Or Keys(3) <> "_4" Then logError DebugPrint, errors, ("-> " & currentTest)
-    If Items(0) <> 1 Or Items(1) <> "A" Or Items(2) <> Empty Or Items(3) <> "B" Then logError DebugPrint, errors, ("-> " & currentTest)
-currentTest = "[FLAT-3] Flatten must insert items of all SubCollections"
-    Set dc1 = New DictCollection: Set dc2 = New DictCollection
-    dc1.SubDC("a").Add "key1", "item1"
-    dc1.SubDC("b").Add("key1", "item2").Add "key2", "item3"
-    If i = 1 Then
-        dc1.Flatten: Items = dc1.Items: Keys = dc1.Keys
-    Else
-        dc1.Flatten dc2: Items = dc2.Items: Keys = dc2.Keys ' test with TargetCollection
-        If dc1.Count <> 2 Then logError DebugPrint, errors, ("-> " & currentTest)
-    End If
-    If Keys(0) <> "a.key1" Or Keys(1) <> "b.key1" Or Keys(2) <> "b.key2" Then logError DebugPrint, errors, ("-> " & currentTest)
-    If Items(0) <> "item1" Or Items(1) <> "item2" Or Items(2) <> "item3" Then logError DebugPrint, errors, ("-> " & currentTest)
-currentTest = "[FLAT-4] Flatten must change .EmulateDictionary to False"
-    Set dc1 = New DictCollection: dc1.EmulateDictionary = True: Set dc2 = New DictCollection: dc2.DefaultValueEnabled = False
-    dc1.Add CInt(1), 1: dc1.Add UtilGetMissingValue, "A": dc1.Add CVErr(11), Empty: dc1.Add dc2, "B"
-    If i = 1 Then
-        dc1.Flatten: Items = dc1.Items: Keys = dc1.Keys
-        If dc1.EmulateDictionary Then logError DebugPrint, errors, ("-> " & currentTest)
-    Else
-        dc1.Flatten dc2: Items = dc2.Items: Keys = dc2.Keys ' test with TargetCollection
-        If Not dc1.EmulateDictionary Then logError DebugPrint, errors, ("-> " & currentTest)
-        If Not IsError(dc1.KeyOfItemAt(2)) Or Not IsObject(dc1.KeyOfItemAt(3)) Then logError DebugPrint, errors, ("-> " & currentTest)
-    End If
-    If TypeName(Keys(0)) = "Integer" Or IsMissing(Keys(1)) Or IsError(Keys(2)) Or IsObject(Keys(3)) Then logError DebugPrint, errors, ("-> " & currentTest)
-    If Items(0) <> 1 Or Items(1) <> "A" Or Items(2) <> Empty Or Items(3) <> "B" Then logError DebugPrint, errors, ("-> " & currentTest)
-currentTest = "[FLAT-5] Flatten must assign correct keys to all items (logic of .EnsureAllItemsHaveKeys)"
-    Set dc1 = New DictCollection: Set dc2 = New DictCollection
-    dc1.AddDC().AddDC().Add(, "item1").Add "_1", "item2"
-    dc1.AddDC("_1").Add , "item3"
-    dc1.AddDC().Add , "item4"
-    dc1.AddDC("_3").Add , "item5"
-    dc1.AddDC("_3_1").Add(, "item6").Add , "item7"
-    If i = 1 Then
-        dc1.Flatten: Items = dc1.Items: Keys = dc1.Keys
-    Else
-        dc1.Flatten dc2: Items = dc2.Items: Keys = dc2.Keys ' test with TargetCollection
-        If dc1.Count <> 5 Then logError DebugPrint, errors, ("-> " & currentTest)
-    End If
-    If Items(0) <> "item1" Or Keys(0) <> "_1_1._1._1_1" Then logError DebugPrint, errors, ("-> " & currentTest)
-    If Items(1) <> "item2" Or Keys(1) <> "_1_1._1._1" Then logError DebugPrint, errors, ("-> " & currentTest)
-    If Items(2) <> "item3" Or Keys(2) <> "_1._1" Then logError DebugPrint, errors, ("-> " & currentTest)
-    If Items(3) <> "item4" Or Keys(3) <> "_3_2._1" Then logError DebugPrint, errors, ("-> " & currentTest)
-    If Items(4) <> "item5" Or Keys(4) <> "_3._1" Then logError DebugPrint, errors, ("-> " & currentTest)
-    If Items(5) <> "item6" Or Keys(5) <> "_3_1._1" Then logError DebugPrint, errors, ("-> " & currentTest)
-    If Items(6) <> "item7" Or Keys(6) <> "_3_1._2" Then logError DebugPrint, errors, ("-> " & currentTest)
-Next
-
-For i = 1 To 2
-    If i = 1 Then
-currentTest = "[UNFL-1A] Unflatten must restore array items in correct order"
-    Else
-currentTest = "[UNFL-1B] Unflatten to TargetArray must restore array items in correct order"
-    End If
-    Set dc1 = New DictCollection: dc1.Add "_3", "item3": dc1.Add "_1", "item1": dc1.Add "_2", "item2"
-    If i = 1 Then dc1.Unflatten Else Set dc2 = New DictCollection: dc1.Unflatten dc2: Set dc1 = dc2
-    If dc1.CollectionType <> 2 Then logError DebugPrint, errors, ("-> " & currentTest)
-    Items = dc1.Items: If Items(0) <> "item1" Or Items(1) <> "item2" Or Items(2) <> "item3" Then logError DebugPrint, errors, ("-> " & currentTest)
-    If dc1.KeyCount <> 0 Then logError DebugPrint, errors, ("-> " & currentTest)
-    If i = 1 Then
-currentTest = "[UNFL-2A] Unflatten must restore array items in correct order and leave non-unflattable keys intact"
-    Else
-currentTest = "[UNFL-2B] Unflatten to TargetArray must restore array items in correct order and leave non-unflattable keys intact"
-    End If
-    Set dc1 = New DictCollection: dc1.Add "_3", "item3": dc1.Add "_1_x", "item4": dc1.Add "_1", "item1": dc1.Add "_2", "item2": dc1.Add "_1_", "item5"
-    If i = 1 Then dc1.Unflatten Else Set dc2 = New DictCollection: dc1.Unflatten dc2: Set dc1 = dc2
-    If dc1.Count <> 5 Or dc1.KeyCount <> 2 Then logError DebugPrint, errors, ("-> " & currentTest)
-    Items = dc1.Items: If Items(0) <> "item1" Or Items(1) <> "item2" Or Items(2) <> "item3" Or Items(3) <> "item4" Or Items(4) <> "item5" Then logError DebugPrint, errors, ("-> " & currentTest)
-    Keys = dc1.Keys(False): If Keys(0) <> "_1_x" Or Keys(1) <> "_1_" Then logError DebugPrint, errors, ("-> " & currentTest)
-    If i = 1 Then
-currentTest = "[UNFL-3A] Unflatten must restore subcollection and its items"
-    Else
-currentTest = "[UNFL-3B] Unflatten to TargetArray must restore subcollection and its items"
-    End If
-    Set dc1 = New DictCollection: dc1.Add "a.b", "B": dc1.Add "b.e", "E": dc1.Add "a.a", "A": dc1.Add "b._1", "D": dc1.Add "a.c", "C"
-    If i = 1 Then dc1.Unflatten Else Set dc2 = New DictCollection: dc1.Unflatten dc2: Set dc1 = dc2
-    ' desired result -> { a{b{B},a{A},c{C}} , b{D,e{E} }
-    If dc1.Count <> 2 Or dc1.KeyCount <> 2 Then logError DebugPrint, errors, ("-> " & currentTest)
-    Items = dc1.AsDC(0).Items: If Items(0) <> "B" Or Items(1) <> "A" Or Items(2) <> "C" Then logError DebugPrint, errors, ("-> " & currentTest)
-    Keys = dc1.AsDC(0).Keys: If Keys(0) <> "b" Or Keys(1) <> "a" Or Keys(2) <> "c" Then logError DebugPrint, errors, ("-> " & currentTest)
-    Items = dc1.AsDC(1).Items: If Items(0) <> "D" Or Items(1) <> "E" Then logError DebugPrint, errors, ("-> " & currentTest)
-    Keys = dc1.AsDC(1).Keys: If Keys(0) <> Empty Or Keys(1) <> "e" Then logError DebugPrint, errors, ("-> " & currentTest)
-    If i = 1 Then
-currentTest = "[UNFL-4A] Unflatten must create correct subtree structure"
-    Else
-currentTest = "[UNFL-4B] Unflatten to TargetArray must create correct subtree structure"
-    End If
-    ' this is the reverse of [FLAT-5]
-    Set dc1 = New DictCollection
-    dc1.Add "_1_1._1._1_1", "item1"
-    dc1.Add "_1_1._1._1", "item2"
-    dc1.Add "_1._1", "item3"
-    dc1.Add "_3_2._1", "item4"
-    dc1.Add "_3._1", "item5"
-    dc1.Add "_3_1._1", "item6"
-    dc1.Add "_3_1._2", "item7"
-    If i = 1 Then dc1.Unflatten Else Set dc2 = New DictCollection: dc1.Unflatten dc2: Set dc1 = dc2
-    ' desired result -> { {{item1,item2}} , _1{item3} , {item4} , _3{item5} , _3_1{item6,item7} }
-    If dc1.Count <> 5 Or dc1.KeyCount <> 3 Then logError DebugPrint, errors, ("-> " & currentTest)
-    Items = dc1.AsDC(0).AsDC(0).Items: If Items(0) <> "item1" Or Items(1) <> "item2" Then logError DebugPrint, errors, ("-> " & currentTest)
-    Items = dc1.AsDC("_1").Items: If Items(0) <> "item3" Then logError DebugPrint, errors, ("-> " & currentTest)
-    Items = dc1.AsDC(2).Items: If Items(0) <> "item4" Then logError DebugPrint, errors, ("-> " & currentTest)
-    Items = dc1.AsDC("_3").Items: If Items(0) <> "item5" Then logError DebugPrint, errors, ("-> " & currentTest)
-    Items = dc1.AsDC("_3_1").Items: If Items(0) <> "item6" Or Items(1) <> "item7" Then logError DebugPrint, errors, ("-> " & currentTest)
-Next
-
 currentTest = "[INC-1] Increment must assign Amount if index or key does not exist"
     Set dc1 = New DictCollection
     dc1.Increment "a", 10: If dc1.Count <> 1 Or dc1.Item("a") <> 10 Then logError DebugPrint, errors, ("-> " & currentTest)
@@ -6042,26 +5589,26 @@ currentTest = "[CAS-1] Copying all settings must work"
     dc1.LazySorting = Not LAZYSORTING_DEFAULT
     dc1.EmptyCollectionValue = CDate(1)
     dc1.NonExistingValue = Null
-    dc1.CompareMode = 3 ' database
+    dc1.CompareMode = 2 ' database
     Set dc2 = New DictCollection: dc1.CopyAllSettingsExceptCollectionType dc1, dc2
         If dc2.ThrowErrors = THROW_ERRORS_DEFAULT Or dc2.DefaultValueEnabled = DEFAULTVALUEENABLED_DEFAULT Then logError DebugPrint, errors, ("-> " & currentTest)
         If dc2.ZeroBasedIndex = ZEROBASEDINDEX_DEFAULT Or dc2.LazySorting = LAZYSORTING_DEFAULT Then logError DebugPrint, errors, ("-> " & currentTest)
         If TypeName(dc2.EmptyCollectionValue) <> "Date" Or dc2.EmptyCollectionValue <> 1 Then logError DebugPrint, errors, ("-> " & currentTest)
         If TypeName(dc2.NonExistingValue) <> "Null" Or dc2.NonExistingValue <> Null Then logError DebugPrint, errors, ("-> " & currentTest)
-        If dc2.CompareMode <> 3 Then logError DebugPrint, errors, ("-> " & currentTest)
+        If dc2.CompareMode <> 2 Then logError DebugPrint, errors, ("-> " & currentTest)
         If dc2.EmulateCollection <> False Or dc2.EmulateDictionary <> False Then logError DebugPrint, errors, ("-> " & currentTest)
 currentTest = "[CAS-2] Copying all settings must work when modifying settings after setting .EmulateCollection=True"
     dc1.EmulateCollection = True
     dc1.ThrowErrors = False
     dc1.DefaultValueEnabled = True
     dc1.ZeroBasedIndex = False
-    dc1.CompareMode = 3 ' database
+    dc1.CompareMode = 2 ' database
     Set dc2 = New DictCollection: dc1.CopyAllSettingsExceptCollectionType dc1, dc2
         If dc2.ThrowErrors <> False Or dc2.DefaultValueEnabled <> True Then logError DebugPrint, errors, ("-> " & currentTest)
         If dc2.ZeroBasedIndex <> False Then logError DebugPrint, errors, ("-> " & currentTest)
         If TypeName(dc2.EmptyCollectionValue) <> "Date" Or dc2.EmptyCollectionValue <> 1 Then logError DebugPrint, errors, ("-> " & currentTest)
         If TypeName(dc2.NonExistingValue) <> "Null" Or dc2.NonExistingValue <> Null Then logError DebugPrint, errors, ("-> " & currentTest)
-        If dc2.CompareMode <> 3 Then logError DebugPrint, errors, ("-> " & currentTest)
+        If dc2.CompareMode <> 2 Then logError DebugPrint, errors, ("-> " & currentTest)
 currentTest = "[CAS-3] Copying all settings must work when modifying settings after setting .EmulateDictionary=True"
     dc1.EmulateDictionary = True
     dc1.ThrowErrors = False
@@ -6069,13 +5616,13 @@ currentTest = "[CAS-3] Copying all settings must work when modifying settings af
     dc1.ZeroBasedIndex = True
     dc1.EmptyCollectionValue = "a"
     dc1.NonExistingValue = "b"
-    dc1.CompareMode = 3 ' database
+    dc1.CompareMode = 2 ' database
     Set dc2 = New DictCollection: dc1.CopyAllSettingsExceptCollectionType dc1, dc2
         If dc2.ThrowErrors <> False Or dc2.DefaultValueEnabled <> True Then logError DebugPrint, errors, ("-> " & currentTest)
         If dc2.ZeroBasedIndex <> True Then logError DebugPrint, errors, ("-> " & currentTest)
         If TypeName(dc2.EmptyCollectionValue) <> "String" Or dc2.EmptyCollectionValue <> "a" Then logError DebugPrint, errors, ("-> " & currentTest)
         If TypeName(dc2.NonExistingValue) <> "String" Or dc2.NonExistingValue <> "b" Then logError DebugPrint, errors, ("-> " & currentTest)
-        If dc2.CompareMode <> 3 Then logError DebugPrint, errors, ("-> " & currentTest)
+        If dc2.CompareMode <> 2 Then logError DebugPrint, errors, ("-> " & currentTest)
     
 
 currentTest = "[INSERT-1] Inserting items in empty or nonexisting collections/arrays"
@@ -6300,11 +5847,661 @@ currentTest = "[ADDDC-5] AddDC must work with .EmulateCollection=True"
 Fail:
     logError DebugPrint, errors, ("-> " & currentTest & " -> Error " & Err.Number & " " & Err.Description)
 ExitFunction:
-    testAdvancedFunctionality = errors
+    testAdvancedFunctionality1 = errors
 End Function
 
+' Tests advanced functionality (DebugPrint=True -> print errors immediately)
+Private Function testAdvancedFunctionality2(Optional DebugPrint As Boolean = False) As Variant
+    On Error GoTo Fail: Err.Clear
+    Dim errors As Variant, dc1 As DictCollection, dc2 As DictCollection, dc3 As DictCollection, currentTest As String
+    Dim i As Long, j As Long, Items As Variant, Keys As Variant, testdata As Variant, Val As Variant
+    errors = Array()
+    
+currentTest = "[COPYTN-1] CopyItemsToNew must copy all settings if called without arguments"
+    Set dc1 = New DictCollection:
+    dc1.EmulateDictionary = True
+    dc1.ThrowErrors = False
+    dc1.DefaultValueEnabled = True
+    dc1.ZeroBasedIndex = True
+    dc1.EmptyCollectionValue = "a"
+    dc1.NonExistingValue = "b"
+    dc1.CompareMode = 2 ' database
+    Set dc2 = dc1.CopyItemsToNew
+    If dc2.ThrowErrors <> False Or dc2.DefaultValueEnabled <> True Then logError DebugPrint, errors, ("-> " & currentTest)
+    If dc2.ZeroBasedIndex <> True Then logError DebugPrint, errors, ("-> " & currentTest)
+    If TypeName(dc2.EmptyCollectionValue) <> "String" Or dc2.EmptyCollectionValue <> "a" Then logError DebugPrint, errors, ("-> " & currentTest)
+    If TypeName(dc2.NonExistingValue) <> "String" Or dc2.NonExistingValue <> "b" Then logError DebugPrint, errors, ("-> " & currentTest)
+    If dc2.CompareMode <> 2 Then logError DebugPrint, errors, ("-> " & currentTest)
+currentTest = "[COPYTN-2] CopyItemsToNew must copy items and keys"
+    Set dc1 = New DictCollection: dc1.Add , "A": dc1.Add "b", "B": dc1.Insert "C", 3, "c"
+    Set dc2 = dc1.CopyItemsToNew
+    Keys = dc2.Keys: If Keys(0) <> Empty Or Keys(1) <> "b" Or Keys(2) <> Empty Or Keys(3) <> "c" Then logError DebugPrint, errors, ("-> " & currentTest)
+    Items = dc2.Items: If Items(0) <> "A" Or Items(1) <> "B" Or Items(2) <> Empty Or Items(3) <> "C" Then logError DebugPrint, errors, ("-> " & currentTest)
+currentTest = "[COPYTN-3] CopyItemsToNew must copy object items"
+    Set dc1 = New DictCollection: dc1.SubDC(0).Add , 1: dc1.SubDC(1).Add , 2:
+    Set dc2 = dc1.CopyItemsToNew
+    If dc2.AsDC(0).Item(0) <> 1 Or dc2.AsDC(1).Item(0) <> 2 Then logError DebugPrint, errors, ("-> " & currentTest)
+currentTest = "[COPYTN-4] CopyItemsToNew must work with .EmulateDictionary=True"
+    Set dc1 = New DictCollection: dc1.EmulateDictionary = True
+    testdata = Array(CInt(1), CLng(2), CSng(3.5), CDbl(4.5), CCur(5), CDec(6), "", "x", UtilGetMissingValue, dc2, Null, CVErr(11), Nothing) ' valid Dictionary key types
+    For i = 0 To UBound(testdata): dc1.Add testdata(i), i: Next
+    Set dc2 = dc1.CopyItemsToNew
+    For i = 0 To UBound(testdata)
+        If Not dc2.Exists(testdata(i)) Then
+            UtilAddArrayValue errors, ("-> " & currentTest)
+        Else
+            If TypeName(dc2.KeyOfItemAt(i)) <> TypeName(testdata(i)) Then logError DebugPrint, errors, ("-> " & currentTest)
+            If dc2.Item(testdata(i)) <> i Then UtilAddArrayValue errors, ("-> " & currentTest)
+        End If
+    Next
+
+currentTest = "[COPYIT-1A] CopyItems must copy all settings if called with Nothing as argument"
+    Set dc1 = New DictCollection: Set dc2 = Nothing
+    dc1.EmulateDictionary = True
+    dc1.ThrowErrors = True
+    dc1.DefaultValueEnabled = True
+    dc1.ZeroBasedIndex = False
+    dc1.EmptyCollectionValue = "a"
+    dc1.NonExistingValue = "b"
+    dc1.CompareMode = 2 ' database
+    dc1.CopyItems dc2
+    If dc2.ThrowErrors <> True Or dc2.DefaultValueEnabled <> True Then logError DebugPrint, errors, ("-> " & currentTest)
+    If dc2.ZeroBasedIndex <> False Then logError DebugPrint, errors, ("-> " & currentTest)
+    If TypeName(dc2.EmptyCollectionValue) <> "String" Or dc2.EmptyCollectionValue <> "a" Then logError DebugPrint, errors, ("-> " & currentTest)
+    If TypeName(dc2.NonExistingValue) <> "String" Or dc2.NonExistingValue <> "b" Then logError DebugPrint, errors, ("-> " & currentTest)
+    If dc2.CompareMode <> 2 Then logError DebugPrint, errors, ("-> " & currentTest)
+currentTest = "[COPYIT-1B] CopyItems must not copy settings if called with existing DictCollection"
+    Set dc2 = New DictCollection
+    dc2.EmulateDictionary = False
+    dc2.ThrowErrors = False
+    dc2.DefaultValueEnabled = False
+    dc2.ZeroBasedIndex = True
+    dc2.EmptyCollectionValue = 1
+    dc2.NonExistingValue = 2
+    dc2.CompareMode = 1 ' text
+    dc1.CopyItems dc2
+    If dc2.ThrowErrors <> False Or dc2.DefaultValueEnabled <> False Then logError DebugPrint, errors, ("-> " & currentTest)
+    If dc2.ZeroBasedIndex <> True Then logError DebugPrint, errors, ("-> " & currentTest)
+    If TypeName(dc2.EmptyCollectionValue) <> "Integer" Or dc2.EmptyCollectionValue <> 1 Then logError DebugPrint, errors, ("-> " & currentTest)
+    If TypeName(dc2.NonExistingValue) <> "Integer" Or dc2.NonExistingValue <> 2 Then logError DebugPrint, errors, ("-> " & currentTest)
+    If dc2.CompareMode <> 1 Then logError DebugPrint, errors, ("-> " & currentTest)
+currentTest = "[COPYIT-2] CopyItems must copy items and keys"
+    Set dc1 = New DictCollection: Set dc2 = New DictCollection: dc1.Add , "A": dc1.Add "b", "B": dc1.Insert "C", 3, "c"
+    dc1.CopyItems dc2
+    Keys = dc2.Keys: If Keys(0) <> Empty Or Keys(1) <> "b" Or Keys(2) <> Empty Or Keys(3) <> "c" Then logError DebugPrint, errors, ("-> " & currentTest)
+    Items = dc2.Items: If Items(0) <> "A" Or Items(1) <> "B" Or Items(2) <> Empty Or Items(3) <> "C" Then logError DebugPrint, errors, ("-> " & currentTest)
+currentTest = "[COPYIT-3] CopyItems must copy items and keys to given TargetIndex"
+    Set dc1 = New DictCollection: Set dc2 = New DictCollection: dc1.Add , "A": dc1.Add "b", "B": dc1.Insert "C", 3, "c"
+    dc1.CopyItems dc2, 1
+    Keys = dc2.Keys: If Keys(0) <> Empty Or Keys(1) <> Empty Or Keys(2) <> "b" Or Keys(3) <> Empty Or Keys(4) <> "c" Then logError DebugPrint, errors, ("-> " & currentTest)
+    Items = dc2.Items: If Items(0) <> Empty Or Items(1) <> "A" Or Items(2) <> "B" Or Items(3) <> Empty Or Items(4) <> "C" Then logError DebugPrint, errors, ("-> " & currentTest)
+currentTest = "[COPYIT-4] CopyItems must copy items and keys to given TargetIndex with TargetCollection.ZeroBasedIndex=False"
+    Set dc1 = New DictCollection: dc1.Add , "A": dc1.Add "b", "B": dc1.Insert "C", 3, "c"
+    Set dc2 = New DictCollection: dc2.ZeroBasedIndex = False
+    dc1.CopyItems dc2, 2
+    Keys = dc2.Keys: If Keys(0) <> Empty Or Keys(1) <> Empty Or Keys(2) <> "b" Or Keys(3) <> Empty Or Keys(4) <> "c" Then logError DebugPrint, errors, ("-> " & currentTest)
+    Items = dc2.Items: If Items(0) <> Empty Or Items(1) <> "A" Or Items(2) <> "B" Or Items(3) <> Empty Or Items(4) <> "C" Then logError DebugPrint, errors, ("-> " & currentTest)
+currentTest = "[COPYIT-5] CopyItems must copy object items"
+    Set dc1 = New DictCollection: Set dc2 = New DictCollection: dc1.SubDC(0).Add , 1: dc1.SubDC(1).Add , 2:
+    dc1.CopyItems dc2
+    If dc2.AsDC(0).Item(0) <> 1 Or dc2.AsDC(1).Item(0) <> 2 Then logError DebugPrint, errors, ("-> " & currentTest)
+    dc1.CopyItems dc2, 3 ' copy to index=3, leaves existing items untouched and inserts an empty item at index=2
+    If dc2.AsDC(0).Item(0) <> 1 Or dc2.AsDC(1).Item(0) <> 2 Then logError DebugPrint, errors, ("-> " & currentTest)
+    If dc2.Item(2) <> Empty Or dc2.AsDC(3).Item(0) <> 1 Or dc2.AsDC(4).Item(0) <> 2 Then logError DebugPrint, errors, ("-> " & currentTest)
+currentTest = "[COPYIT-6] CopyItems must work with .EmulateDictionary=True"
+    Set dc1 = New DictCollection: Set dc2 = Nothing: dc1.EmulateDictionary = True
+    testdata = Array(CInt(1), CLng(2), CSng(3.5), CDbl(4.5), CCur(5), CDec(6), "", "x", UtilGetMissingValue, New DictCollection, Null, CVErr(11), Nothing) ' valid Dictionary key types
+    For i = 0 To UBound(testdata): dc1.Add testdata(i), i: Next
+    dc1.CopyItems dc2
+    For i = 0 To UBound(testdata)
+        If Not dc2.Exists(testdata(i)) Then
+            UtilAddArrayValue errors, ("-> " & currentTest)
+        Else
+            If TypeName(dc2.KeyOfItemAt(i)) <> TypeName(testdata(i)) Then logError DebugPrint, errors, ("-> " & currentTest)
+            If dc2.Item(testdata(i)) <> i Then UtilAddArrayValue errors, ("-> " & currentTest)
+        End If
+    Next
+currentTest = "[COPYIT-7] CopyItems must be chainable"
+    Set dc1 = New DictCollection: Set dc2 = New DictCollection: dc1.Add "a", 1
+    Set dc2 = dc1.CopyItems(New DictCollection) ' get source DictCollection
+    If Not IsObject(dc2) Then
+        logError DebugPrint, errors, ("-> " & currentTest & ": function did not return object")
+    Else
+        If Not dc2 Is dc1 Then logError DebugPrint, errors, ("-> " & currentTest & ": returned object is not the same as source object")
+    End If
+    
+    For i = 1 To 3 ' 1 = CloneToNew, 2 = CloneTo, 3 = CloneToPreserve
+If i = 1 Then currentTest = "[CLONE-1A] CloneToNew must copy all settings correctly"
+If i = 2 Then currentTest = "[CLONE-1B] CloneTo must copy all settings correctly"
+If i = 3 Then currentTest = "[CLONE-1C] CloneToPreserve must not copy settings"
+        Set dc1 = New DictCollection: Set dc2 = New DictCollection
+        dc1.EmulateCollection = True
+        dc1.DefaultValueEnabled = False
+        dc1.EmptyCollectionValue = "empty"
+        dc1.NonExistingValue = #1/1/2000#
+        dc1.LazySorting = False
+        dc1.ZeroBasedIndex = False
+        dc1.CompareMode = vbTextCompare
+        dc1.ThrowErrors = True
+        ' clone
+        If i = 1 Then Set dc2 = dc1.CloneToNew
+        If i = 2 Then dc1.CloneTo dc2
+        If i = 3 Then dc2.NonExistingValue = 1: dc2.LazySorting = True: dc1.CloneToPreserve dc2
+        ' tests
+        If i = 1 Or i = 2 Then
+            If dc2.EmulateCollection <> True Or dc2.DefaultValueEnabled <> False Or dc2.EmptyCollectionValue <> "empty" Then logError DebugPrint, errors, ("-> " & currentTest)
+            If dc2.NonExistingValue <> #1/1/2000# Or dc2.LazySorting <> False Or dc2.ZeroBasedIndex <> False Then logError DebugPrint, errors, ("-> " & currentTest)
+            If dc2.CompareMode <> vbTextCompare Or dc2.ThrowErrors <> True Then logError DebugPrint, errors, ("-> " & currentTest)
+        ElseIf i = 3 Then
+            If dc2.NonExistingValue <> 1 Or dc2.LazySorting <> True Then logError DebugPrint, errors, ("-> " & currentTest)
+        End If
+If i = 1 Then currentTest = "[CLONE-2A] CloneToNew must copy all values"
+If i = 2 Then currentTest = "[CLONE-2B] CloneTo must copy all values"
+If i = 3 Then currentTest = "[CLONE-2C] CloneToPreserve must copy all values"
+        Set dc1 = New DictCollection: Set dc2 = New DictCollection: Set dc3 = New DictCollection: dc3.DefaultValueEnabled = False
+        testdata = Array(Array(Empty, Empty), Array("1", CInt(1)), Array("2", CLng(2)), Array("3", CSng(3.5)), Array("4", CDbl(4.5)), Array("5", CCur(5)), Array("6", CDec(6)), Array("7", "") _
+        , Array("8", "x"), Array("9", dc3), Array("10", Null), Array("11", CVErr(11)), Array("12", Nothing)) ' valid DictColletion value types
+        For j = 0 To UBound(testdata)
+            dc1.Add testdata(j)(0), testdata(j)(1)
+        Next
+        ' clone
+        If i = 1 Then Set dc2 = dc1.CloneToNew
+        If i = 2 Then dc1.CloneTo dc2
+        If i = 3 Then dc1.CloneToPreserve dc2
+        ' test
+        Items = dc2.Items: Keys = dc2.Keys
+        For j = 0 To UBound(testdata)
+            ' test items for equality
+            Select Case TypeName(testdata(j)(1))
+                Case "Nothing": If TypeName(Items(j)) <> "Nothing" Then logError DebugPrint, errors, ("-> " & currentTest)
+                Case "DictCollection":
+                    If TypeName(Items(j)) <> "DictCollection" Then
+                        logError DebugPrint, errors, ("-> " & currentTest)
+                    Else
+                        ' cloned DictCollection has to be a different object
+                        ' otherwise manipulating items in the original subcollection will affect the cloned one
+                        If Items(j) Is testdata(j)(1) Then logError DebugPrint, errors, ("-> " & currentTest)
+                    End If
+                Case Else:
+                    If TypeName(Items(j)) <> TypeName(testdata(j)(1)) Then
+                        logError DebugPrint, errors, ("-> " & currentTest)
+                    Else
+                        If Items(j) <> testdata(j)(1) Then logError DebugPrint, errors, ("-> " & currentTest)
+                    End If
+            End Select
+            ' test keys for equality
+            If Keys(j) <> testdata(j)(0) Then logError DebugPrint, errors, ("-> " & currentTest)
+        Next
+If i = 1 Then currentTest = "[CLONE-3A] CloneToNew must replicate subcollection structure"
+If i = 2 Then currentTest = "[CLONE-3B] CloneTo must replicate subcollection structure"
+If i = 3 Then currentTest = "[CLONE-3C] CloneToPreserve must replicate subcollection structure"
+        Set dc1 = New DictCollection: Set dc2 = New DictCollection: Set dc3 = Nothing
+        dc1.AddDC("a").Add("a1", 1).Add "a2", 2 ' SubCollection "a" contains two values
+        dc1.AddDC("b").Add("b1", 3).Add("b2", 4).AddDC "b3" ' SubCollection "b" contains two values and an empty SubCollection
+        dc1.AddDC("c").AddDC.AddDC ' SubCollection "c" contains a SubCollection that contains an empty SubCollection
+        ' clone
+        If i = 1 Then Set dc2 = dc1.CloneToNew
+        If i = 2 Then dc1.CloneTo dc2
+        If i = 3 Then dc1.CloneToPreserve dc2
+        ' test
+        If Not dc2.Count = dc1.Count Then logError DebugPrint, errors, ("-> " & currentTest & ": cloned collection must have item count = " & dc1.Count)
+        If Not dc2.KeyCount = dc1.KeyCount Then logError DebugPrint, errors, ("-> " & currentTest & ": cloned collection key count must be " & dc1.KeyCount)
+        If TypeName(dc2(0)) <> "DictCollection" Or TypeName(dc2(1)) <> "DictCollection" Or TypeName(dc2(2)) <> "DictCollection" Then logError DebugPrint, errors, ("-> " & currentTest & ": cloned collection items must be of type DictCollection")
+        If dc2.AsDC("a")("a1") <> 1 Or dc2.AsDC("a")("a2") <> 2 Then logError DebugPrint, errors, ("-> " & currentTest & ": cloned SubCollection 'a' items must have same values as source SubCollection")
+        If dc2.AsDC("b")("b1") <> 3 Or dc2.AsDC("b")("b2") <> 4 Then logError DebugPrint, errors, ("-> " & currentTest & ": cloned SubCollection 'b' items must have same values as source SubCollection")
+        If TypeName(dc2.AsDC("b")("b3")) <> "DictCollection" Then
+            logError DebugPrint, errors, ("-> " & currentTest & ": cloned SubCollection 'b' item 'b3' must be of type SubCollection")
+        Else
+            If dc2.AsDC("b").AsDC("b3").Count <> 0 Then logError DebugPrint, errors, ("-> " & currentTest & ": cloned SubCollection 'b' item 'b3' must be empty SubCollection")
+        End If
+        If TypeName(dc2.AsDC("c")(0)) <> "DictCollection" Then
+            logError DebugPrint, errors, ("-> " & currentTest & ": cloned SubCollection 'c' must have SubCollection")
+        Else
+            If dc2.AsDC("c").AsDC(0).Count <> 1 Then
+                logError DebugPrint, errors, ("-> " & currentTest & ": cloned SubCollection 'c' must have SubCollection with item count = 1")
+            Else
+                Set dc3 = dc2.AddDC("c").AsDC(0)(0)
+                If TypeName(dc3) <> "DictCollection" Then
+                    logError DebugPrint, errors, ("-> " & currentTest & ": cloned SubCollection 'c' first SubCollection must have SubCollection")
+                Else
+                    If dc3.Count <> 0 Then logError DebugPrint, errors, ("-> " & currentTest & ": cloned SubCollection 'c' first SubCollection must have SubCollection that is empty")
+                End If
+            End If
+        End If
+If i = 1 Then currentTest = "[CLONE-4A] CloneToNew must replicate all key types with .EmulateDictionary=True"
+If i = 2 Then currentTest = "[CLONE-4B] CloneTo must replicate all key types with .EmulateDictionary=True"
+If i = 3 Then currentTest = "[CLONE-4C] CloneToPreserve must replicate all key types with .EmulateDictionary=True"
+        Set dc1 = New DictCollection: dc1.EmulateDictionary = True: Set dc2 = New DictCollection
+        testdata = Array(CInt(1), CLng(2), CSng(3.5), CDbl(4.5), CCur(5), CDec(6), "", "x", UtilGetMissingValue, dc2, Null, CVErr(11), Nothing) ' valid Dictionary key types
+        For j = 0 To UBound(testdata): dc1.Add testdata(j), j: Next
+        ' clone
+        If i = 1 Then Set dc2 = dc1.CloneToNew
+        If i = 2 Then dc1.CloneTo dc2
+        If i = 3 Then dc2.EmulateDictionary = True: dc1.CloneToPreserve dc2
+        ' test
+        If Not dc2.EmulateDictionary Then logError DebugPrint, errors, ("-> " & currentTest & ": cloned DictCollection must have .EmulateDictionary=True")
+        For j = 0 To UBound(testdata)
+            If Not dc2.Exists(testdata(j)) Then
+                logError DebugPrint, errors, ("-> " & currentTest & ": cloned DictCollection must contain key '" & testdata(j) & "'")
+            Else
+                If TypeName(dc2.KeyOfItemAt(j)) <> TypeName(testdata(j)) Then logError DebugPrint, errors, ("-> " & currentTest & ": key at " & j & " must have type '" & TypeName(testdata(j)) & "'")
+                If dc2.Item(testdata(j)) <> j Then logError DebugPrint, errors, ("-> " & currentTest & ": item at " & j & " must have value " & j)
+            End If
+        Next
+    If i = 2 Then
+currentTest = "[CLONE-5B] CloneTo must be chainable"
+        Set dc1 = New DictCollection
+        Set dc2 = dc1.CloneTo(New DictCollection)
+        If dc2 Is Nothing Then
+            logError DebugPrint, errors, ("-> " & currentTest)
+        Else
+            If Not dc2 Is dc1 Then logError DebugPrint, errors, ("-> " & currentTest)
+        End If
+    End If
+    If i = 3 Then
+currentTest = "[CLONE-5C] CloneToPreserve must be chainable"
+        Set dc1 = New DictCollection
+        Set dc2 = dc1.CloneToPreserve(New DictCollection)
+        If dc2 Is Nothing Then
+            logError DebugPrint, errors, ("-> " & currentTest)
+        Else
+            If Not dc2 Is dc1 Then logError DebugPrint, errors, ("-> " & currentTest)
+        End If
+currentTest = "[CLONE-6] CloneToPreserve must overwrite existing keys"
+        Set dc1 = New DictCollection: dc1.Add "a", 1
+        Set dc2 = New DictCollection: dc2.Add "a", 2
+        dc1.CloneToPreserve dc2
+        If dc2("a") <> 1 Then logError DebugPrint, errors, ("-> " & currentTest)
+currentTest = "[CLONE-7] CloneToPreserve must preserve existing keys"
+        Set dc1 = New DictCollection: dc1.Add "a", 1
+        Set dc2 = New DictCollection: dc2.Add "b", 2
+        dc1.CloneToPreserve dc2
+        If dc2.KeyOfItemAt(0) <> "b" Or dc2.ItemAt(0) <> 2 Then logError DebugPrint, errors, ("-> " & currentTest)
+        If dc2.KeyOfItemAt(1) <> "a" Or dc2.ItemAt(1) <> 1 Then logError DebugPrint, errors, ("-> " & currentTest)
+    End If
+    
+Next
+
+    For i = 1 To 2 ' 1 = .Flatten(), 2 = .FlattenToNew()
+If i = 1 Then currentTest = "[FLAT-1A] Flatten must replace empty and nonexisting DictCollections with .EmptyCollectionValue"
+If i = 2 Then currentTest = "[FLAT-1B] FlattenToNew must replace empty and nonexisting DictCollections with .EmptyCollectionValue"
+        Set dc1 = New DictCollection: Set dc2 = New DictCollection
+        dc1.EmptyCollectionValue = "x"
+        dc1.AddDC ' empty
+        dc1.AddDC().CollectionType = 0 ' nonexisting
+        If i = 1 Then
+            dc1.Flatten: Items = dc1.Items: Keys = dc1.Keys
+        Else
+            Set dc2 = dc1.FlattenToNew: Items = dc2.Items: Keys = dc2.Keys ' test with TargetCollection
+            If Not IsObject(dc1.Item(0)) Or Not IsObject(dc1.Item(1)) Then logError DebugPrint, errors, ("-> " & currentTest)
+        End If
+        If Items(0) <> dc1.EmptyCollectionValue Or Items(1) <> dc1.EmptyCollectionValue Then logError DebugPrint, errors, ("-> " & currentTest)
+If i = 1 Then currentTest = "[FLAT-2A] Flatten must not change DictCollections with no SubCollections"
+If i = 2 Then currentTest = "[FLAT-2B] FlattenToNew must not change DictCollections with no SubCollections"
+        Set dc1 = New DictCollection: Set dc2 = New DictCollection
+        dc1.Add , 1: dc1.Add "a", "A": dc1.Item(3) = "B"
+        If i = 1 Then
+            dc1.Flatten: Items = dc1.Items: Keys = dc1.Keys
+        Else
+            Set dc2 = dc1.FlattenToNew: Items = dc2.Items: Keys = dc2.Keys ' test with TargetCollection
+            If dc1.KeyOfItemAt(0) <> Empty Or dc1.KeyOfItemAt(3) <> Empty Then logError DebugPrint, errors, ("-> " & currentTest)
+        End If
+        If Keys(0) <> "_1" Or Keys(1) <> "a" Or Keys(2) <> "_3" Or Keys(3) <> "_4" Then logError DebugPrint, errors, ("-> " & currentTest)
+        If Items(0) <> 1 Or Items(1) <> "A" Or Items(2) <> Empty Or Items(3) <> "B" Then logError DebugPrint, errors, ("-> " & currentTest)
+If i = 1 Then currentTest = "[FLAT-3A] Flatten must insert items of all SubCollections"
+If i = 2 Then currentTest = "[FLAT-3B] FlattenToNew must insert items of all SubCollections"
+        Set dc1 = New DictCollection: Set dc2 = New DictCollection
+        dc1.SubDC("a").Add "key1", "item1"
+        dc1.SubDC("b").Add("key1", "item2").Add "key2", "item3"
+        If i = 1 Then
+            dc1.Flatten: Items = dc1.Items: Keys = dc1.Keys
+        Else
+            Set dc2 = dc1.FlattenToNew: Items = dc2.Items: Keys = dc2.Keys ' test with TargetCollection
+            If dc1.Count <> 2 Then logError DebugPrint, errors, ("-> " & currentTest)
+        End If
+        If Keys(0) <> "a.key1" Or Keys(1) <> "b.key1" Or Keys(2) <> "b.key2" Then logError DebugPrint, errors, ("-> " & currentTest)
+        If Items(0) <> "item1" Or Items(1) <> "item2" Or Items(2) <> "item3" Then logError DebugPrint, errors, ("-> " & currentTest)
+If i = 1 Then currentTest = "[FLAT-4A] Flatten must change .EmulateDictionary to False"
+If i = 2 Then currentTest = "[FLAT-4B] FlattenToNew must change .EmulateDictionary to False"
+        Set dc1 = New DictCollection: dc1.EmulateDictionary = True: Set dc2 = New DictCollection: dc2.DefaultValueEnabled = False
+        dc1.Add CInt(1), 1: dc1.Add UtilGetMissingValue, "A": dc1.Add CVErr(11), Empty: dc1.Add dc2, "B"
+        If i = 1 Then
+            dc1.Flatten: Items = dc1.Items: Keys = dc1.Keys
+            If dc1.EmulateDictionary Then logError DebugPrint, errors, ("-> " & currentTest)
+        Else
+            Set dc2 = dc1.FlattenToNew: Items = dc2.Items: Keys = dc2.Keys ' test with TargetCollection
+            If Not dc1.EmulateDictionary Then logError DebugPrint, errors, ("-> " & currentTest)
+            If Not IsError(dc1.KeyOfItemAt(2)) Or Not IsObject(dc1.KeyOfItemAt(3)) Then logError DebugPrint, errors, ("-> " & currentTest)
+        End If
+        If TypeName(Keys(0)) = "Integer" Or IsMissing(Keys(1)) Or IsError(Keys(2)) Or IsObject(Keys(3)) Then logError DebugPrint, errors, ("-> " & currentTest)
+        If Items(0) <> 1 Or Items(1) <> "A" Or Items(2) <> Empty Or Items(3) <> "B" Then logError DebugPrint, errors, ("-> " & currentTest)
+If i = 1 Then currentTest = "[FLAT-5A] Flatten must assign correct keys to all items (logic of .EnsureAllItemsHaveKeys)"
+If i = 2 Then currentTest = "[FLAT-5B] FlattenToNew must assign correct keys to all items (logic of .EnsureAllItemsHaveKeys)"
+        Set dc1 = New DictCollection: Set dc2 = New DictCollection
+        dc1.AddDC().AddDC().Add(, "item1").Add "_1", "item2"
+        dc1.AddDC("_1").Add , "item3"
+        dc1.AddDC().Add , "item4"
+        dc1.AddDC("_3").Add , "item5"
+        dc1.AddDC("_3_1").Add(, "item6").Add , "item7"
+        If i = 1 Then
+            dc1.Flatten: Items = dc1.Items: Keys = dc1.Keys
+        Else
+            Set dc2 = dc1.FlattenToNew: Items = dc2.Items: Keys = dc2.Keys ' test with TargetCollection
+            If dc1.Count <> 5 Then logError DebugPrint, errors, ("-> " & currentTest)
+        End If
+        If Items(0) <> "item1" Or Keys(0) <> "_1_1._1._1_1" Then logError DebugPrint, errors, ("-> " & currentTest)
+        If Items(1) <> "item2" Or Keys(1) <> "_1_1._1._1" Then logError DebugPrint, errors, ("-> " & currentTest)
+        If Items(2) <> "item3" Or Keys(2) <> "_1._1" Then logError DebugPrint, errors, ("-> " & currentTest)
+        If Items(3) <> "item4" Or Keys(3) <> "_3_2._1" Then logError DebugPrint, errors, ("-> " & currentTest)
+        If Items(4) <> "item5" Or Keys(4) <> "_3._1" Then logError DebugPrint, errors, ("-> " & currentTest)
+        If Items(5) <> "item6" Or Keys(5) <> "_3_1._1" Then logError DebugPrint, errors, ("-> " & currentTest)
+        If Items(6) <> "item7" Or Keys(6) <> "_3_1._2" Then logError DebugPrint, errors, ("-> " & currentTest)
+If i = 1 Then
+    currentTest = "[FLAT-6] Flatten must be chainable"
+        Set dc1 = New DictCollection: Set dc2 = New DictCollection
+        Set dc2 = dc1.Flatten
+        If dc2 Is Nothing Then
+            logError DebugPrint, errors, ("-> " & currentTest)
+        Else
+            If Not dc2 Is dc1 Then logError DebugPrint, errors, ("-> " & currentTest)
+        End If
+End If
+    Next
+
+    For i = 1 To 2 ' 1 = .Unflatten(), 2 = .UnflattenToNew()
+If i = 1 Then currentTest = "[UNFL-1A] Unflatten must restore array items in correct order"
+If i = 2 Then currentTest = "[UNFL-1B] UnflattenToNew must restore array items in correct order"
+        Set dc1 = New DictCollection: dc1.Add "_3", "item3": dc1.Add "_1", "item1": dc1.Add "_2", "item2"
+        If i = 1 Then dc1.Unflatten Else Set dc1 = dc1.UnflattenToNew
+        If dc1.CollectionType <> 2 Then logError DebugPrint, errors, ("-> " & currentTest)
+        Items = dc1.Items: If Items(0) <> "item1" Or Items(1) <> "item2" Or Items(2) <> "item3" Then logError DebugPrint, errors, ("-> " & currentTest)
+        If dc1.KeyCount <> 0 Then logError DebugPrint, errors, ("-> " & currentTest)
+If i = 1 Then currentTest = "[UNFL-2A] Unflatten must restore array items in correct order and leave non-unflattable keys intact"
+If i = 2 Then currentTest = "[UNFL-2B] UnflattenToNew must restore array items in correct order and leave non-unflattable keys intact"
+        Set dc1 = New DictCollection: dc1.Add "_3", "item3": dc1.Add "_1_x", "item4": dc1.Add "_1", "item1": dc1.Add "_2", "item2": dc1.Add "_1_", "item5"
+        If i = 1 Then dc1.Unflatten Else Set dc1 = dc1.UnflattenToNew
+        If dc1.Count <> 5 Or dc1.KeyCount <> 2 Then logError DebugPrint, errors, ("-> " & currentTest)
+        Items = dc1.Items: If Items(0) <> "item1" Or Items(1) <> "item2" Or Items(2) <> "item3" Or Items(3) <> "item4" Or Items(4) <> "item5" Then logError DebugPrint, errors, ("-> " & currentTest)
+        Keys = dc1.Keys(False): If Keys(0) <> "_1_x" Or Keys(1) <> "_1_" Then logError DebugPrint, errors, ("-> " & currentTest)
+If i = 1 Then currentTest = "[UNFL-3A] Unflatten must restore subcollection and its items"
+If i = 2 Then currentTest = "[UNFL-3B] UnflattenToNew must restore subcollection and its items"
+        Set dc1 = New DictCollection: dc1.Add "a.b", "B": dc1.Add "b.e", "E": dc1.Add "a.a", "A": dc1.Add "b._1", "D": dc1.Add "a.c", "C"
+        If i = 1 Then dc1.Unflatten Else Set dc1 = dc1.UnflattenToNew
+        ' desired result -> { a{b{B},a{A},c{C}} , b{D,e{E} }
+        If dc1.Count <> 2 Or dc1.KeyCount <> 2 Then logError DebugPrint, errors, ("-> " & currentTest)
+        Items = dc1.AsDC(0).Items: If Items(0) <> "B" Or Items(1) <> "A" Or Items(2) <> "C" Then logError DebugPrint, errors, ("-> " & currentTest)
+        Keys = dc1.AsDC(0).Keys: If Keys(0) <> "b" Or Keys(1) <> "a" Or Keys(2) <> "c" Then logError DebugPrint, errors, ("-> " & currentTest)
+        Items = dc1.AsDC(1).Items: If Items(0) <> "D" Or Items(1) <> "E" Then logError DebugPrint, errors, ("-> " & currentTest)
+        Keys = dc1.AsDC(1).Keys: If Keys(0) <> Empty Or Keys(1) <> "e" Then logError DebugPrint, errors, ("-> " & currentTest)
+If i = 1 Then currentTest = "[UNFL-4A] Unflatten must create correct subtree structure"
+If i = 2 Then currentTest = "[UNFL-4B] UnflattenToNew must create correct subtree structure"
+        ' this is the reverse of [FLAT-5]
+        Set dc1 = New DictCollection
+        dc1.Add "_1_1._1._1_1", "item1"
+        dc1.Add "_1_1._1._1", "item2"
+        dc1.Add "_1._1", "item3"
+        dc1.Add "_3_2._1", "item4"
+        dc1.Add "_3._1", "item5"
+        dc1.Add "_3_1._1", "item6"
+        dc1.Add "_3_1._2", "item7"
+        If i = 1 Then dc1.Unflatten Else Set dc1 = dc1.UnflattenToNew
+        ' desired result -> { {{item1,item2}} , _1{item3} , {item4} , _3{item5} , _3_1{item6,item7} }
+        If dc1.Count <> 5 Or dc1.KeyCount <> 3 Then logError DebugPrint, errors, ("-> " & currentTest)
+        Items = dc1.AsDC(0).AsDC(0).Items: If Items(0) <> "item1" Or Items(1) <> "item2" Then logError DebugPrint, errors, ("-> " & currentTest)
+        Items = dc1.AsDC("_1").Items: If Items(0) <> "item3" Then logError DebugPrint, errors, ("-> " & currentTest)
+        Items = dc1.AsDC(2).Items: If Items(0) <> "item4" Then logError DebugPrint, errors, ("-> " & currentTest)
+        Items = dc1.AsDC("_3").Items: If Items(0) <> "item5" Then logError DebugPrint, errors, ("-> " & currentTest)
+        Items = dc1.AsDC("_3_1").Items: If Items(0) <> "item6" Or Items(1) <> "item7" Then logError DebugPrint, errors, ("-> " & currentTest)
+If i = 1 Then
+    currentTest = "[UNFL-5] Unflatten must be chainable"
+        Set dc1 = New DictCollection: Set dc2 = New DictCollection
+        Set dc2 = dc1.Unflatten
+        If dc2 Is Nothing Then
+            logError DebugPrint, errors, ("-> " & currentTest)
+        Else
+            If Not dc2 Is dc1 Then logError DebugPrint, errors, ("-> " & currentTest)
+        End If
+End If
+    Next
+    
+    For i = 1 To 4
+        Set dc1 = New DictCollection: Set dc2 = New DictCollection
+If i = 1 Then currentTest = "[MATCHKNEW-1A] MatchKeysToNew must copy settings if nothing to drop and empty source DictCollection"
+If i = 2 Then dc1.Add "x", 1: currentTest = "[MATCHKNEW-1B] MatchKeysToNew must copy settings if nothing to drop and filled source DictCollection"
+If i = 3 Then Keys = Array("x"): currentTest = "[MATCHKNEW-1C] MatchKeysToNew must copy settings if empty source DictCollection"
+If i = 4 Then dc1.Add "x", 1: Keys = Array("x"): currentTest = "[MATCHKNEW-1D] MatchKeysToNew must copy settings if filled source DictCollection"
+        dc1.EmulateCollection = True
+        dc1.DefaultValueEnabled = False
+        dc1.EmptyCollectionValue = "empty"
+        dc1.NonExistingValue = #1/1/2000#
+        dc1.LazySorting = False
+        dc1.ZeroBasedIndex = False
+        dc1.CompareMode = vbTextCompare
+        dc1.ThrowErrors = True
+        ' filter
+        Set dc2 = dc1.MatchKeysToNew(Array())
+        ' tests
+        If dc2.EmulateCollection <> True Or dc2.DefaultValueEnabled <> False Or dc2.EmptyCollectionValue <> "empty" Then logError DebugPrint, errors, ("-> " & currentTest)
+        If dc2.NonExistingValue <> #1/1/2000# Or dc2.LazySorting <> False Or dc2.ZeroBasedIndex <> False Then logError DebugPrint, errors, ("-> " & currentTest)
+        If dc2.CompareMode <> vbTextCompare Or dc2.ThrowErrors <> True Then logError DebugPrint, errors, ("-> " & currentTest)
+    Next
+currentTest = "[MATCHKNEW-2] MatchKeysToNew must return empty DictCollection if there is nothing to match"
+    Set dc1 = New DictCollection: Set dc2 = New DictCollection
+    dc1.Add("a", 1).Add("b", 2).Add(, 2.5).Add "c", 3
+    Set dc2 = dc1.MatchKeysToNew(Array())
+    If dc2.Count <> 0 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection must be empty")
+currentTest = "[MATCHKNEW-3A] MatchKeysToNew must find exact matches with case-sensitive matching"
+    Set dc1 = New DictCollection: Set dc2 = New DictCollection
+    dc1.Add("a", 1).Add("b", 2).Add(, 2.5).Add "c", 3
+    Set dc2 = dc1.MatchKeysToNew(Array("a", "B"), "?", vbBinaryCompare)
+    If dc2.Count <> 2 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has icorrect item count")
+    If dc2.KeyOfItemAt(0) <> "a" Or dc2.ItemOf(0) = 1 Or dc2.KeyOfItemAt(1) <> "B" Or dc2.ItemOf(1) = "?" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection contains incorrect keys/items")
+currentTest = "[MATCHKNEW-3B] MatchKeysToNew must find matches with case-insensitive matching"
+    Set dc1 = New DictCollection: Set dc2 = New DictCollection
+    dc1.Add("a", 1).Add("b", 2).Add(, 2.5).Add "c", 3
+    Set dc2 = dc1.MatchKeysToNew(Array("a", "B"), , vbTextCompare)
+    If dc2.Count <> 2 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect item count")
+    If dc2.KeyOfItemAt(0) <> "a" Or dc2.ItemOf(0) = 1 Or dc2.KeyOfItemAt(1) <> "B" Or dc2.ItemOf(1) = 2 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection contains incorrect keys/items")
+currentTest = "[MATCHKNEW-4] MatchKeysToNew must return all keys if nothing was found"
+    Set dc1 = New DictCollection: Set dc2 = New DictCollection
+    dc1.Add("x", 1).Add("_X_", 2).Add("_x", 3).Add "X_", 4
+    Set dc2 = dc1.MatchKeysToNew(Array("a", "b", "c"), -1, vbBinaryCompare)
+    If dc2.Count <> 3 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect item count")
+    If dc2.KeyOfItemAt(0) <> "a" Or dc2.ItemOf(0) = -1 Or dc2.KeyOfItemAt(1) <> "b" Or dc2.ItemOf(1) = -1 Or dc2.KeyOfItemAt(2) <> "c" Or dc2.ItemOf(2) = -1 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection contains incorrect keys/items")
+currentTest = "[MATCHKNEW-5] MatchKeysToNew must clone matching SubCollections"
+    Set dc1 = New DictCollection: Set dc2 = New DictCollection
+    dc1.AddDC("x").Add "a", 1
+    dc1.AddDC("y").Add "b", 2
+    Set dc2 = dc1.MatchKeysToNew(Array("y")) ' match SubCollection 'y'
+    dc1.AsDC("y").RemoveAll ' empty source SubCollection, must not affect cloned SubCollection
+    If dc2.Count <> 1 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect item number")
+    If dc2.AsDC("y").Count <> 1 Or dc2.AsDC("y").KeyOfItemAt(0) <> "b" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect SubCollection")
+currentTest = "[MATCHKNEW-6] MatchKeysToNew must trow correct error if KeyArr is of invalid type"
+    Set dc1 = New DictCollection: Set dc2 = New DictCollection
+    dc1.ThrowErrors = True
+    testdata = Array(CInt(1), CDbl(1#), "text", New DictCollection)
+    On Error Resume Next
+    For i = 0 To UBound(testdata)
+        Err.Clear: Set dc2 = dc1.MatchKeysToNew(testdata(i)): If Err.Number <> 13 Then logError DebugPrint, errors, ("-> " & currentTest & ": KeyArr of Type " & TypeName(testdata(i)) & " must throw Error 13")
+    Next
+    On Error GoTo Fail: Err.Clear
+       
+    For i = 1 To 4
+        Set dc1 = New DictCollection: Set dc2 = New DictCollection
+If i = 1 Then currentTest = "[KEEPKNEW-1A] KeepKeysToNew must copy settings if nothing to drop and empty source DictCollection"
+If i = 2 Then dc1.Add "x", 1: currentTest = "[KEEPKNEW-1B] KeepKeysToNew must copy settings if nothing to drop and filled source DictCollection"
+If i = 3 Then Keys = Array("x"): currentTest = "[KEEPKNEW-1C] KeepKeysToNew must copy settings if empty source DictCollection"
+If i = 4 Then dc1.Add "x", 1: Keys = Array("x"): currentTest = "[KEEPKNEW-1D] KeepKeysToNew must copy settings if filled source DictCollection"
+        dc1.EmulateCollection = True
+        dc1.DefaultValueEnabled = False
+        dc1.EmptyCollectionValue = "empty"
+        dc1.NonExistingValue = #1/1/2000#
+        dc1.LazySorting = False
+        dc1.ZeroBasedIndex = False
+        dc1.CompareMode = vbTextCompare
+        dc1.ThrowErrors = True
+        ' filter
+        Set dc2 = dc1.KeepKeysToNew(Array())
+        ' tests
+        If dc2.EmulateCollection <> True Or dc2.DefaultValueEnabled <> False Or dc2.EmptyCollectionValue <> "empty" Then logError DebugPrint, errors, ("-> " & currentTest)
+        If dc2.NonExistingValue <> #1/1/2000# Or dc2.LazySorting <> False Or dc2.ZeroBasedIndex <> False Then logError DebugPrint, errors, ("-> " & currentTest)
+        If dc2.CompareMode <> vbTextCompare Or dc2.ThrowErrors <> True Then logError DebugPrint, errors, ("-> " & currentTest)
+    Next
+currentTest = "[KEEPKNEW-2] KeepKeysToNew must return empty DictCollection if there is nothing to keep"
+    Set dc1 = New DictCollection: Set dc2 = New DictCollection
+    dc1.Add("a", 1).Add("b", 2).Add(, 2.5).Add "c", 3
+    Set dc2 = dc1.KeepKeysToNew(Array())
+    If dc2.Count <> 0 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection must be empty")
+currentTest = "[KEEPKNEW-3A] KeepKeysToNew must keep exact matches with case-sensitive matching"
+    Set dc1 = New DictCollection: Set dc2 = New DictCollection
+    dc1.Add("a", 1).Add("b", 2).Add(, 2.5).Add "c", 3
+    Set dc2 = dc1.KeepKeysToNew(Array("a", "B"), , vbBinaryCompare)
+    If dc2.Count <> 1 Or dc2.KeyOfItemAt(0) <> "a" Or dc2.ItemOf(0) = 1 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection contains incorrect key/item")
+currentTest = "[KEEPKNEW-3B] KeepKeysToNew must keep exact matches with case-insensitive matching"
+    Set dc1 = New DictCollection: Set dc2 = New DictCollection
+    dc1.Add("a", 1).Add("b", 2).Add(, 2.5).Add "c", 3
+    Set dc2 = dc1.KeepKeysToNew(Array("a", "B"), , vbTextCompare)
+    If dc2.Count <> 2 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect item count")
+    If dc2.KeyAtKeyIndex(0) <> "a" Or dc2.KeyAtKeyIndex(1) <> "b" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection keys are incorrect")
+    If dc2.ItemAt(0) <> 1 Or dc2.ItemAt(1) <> 2 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection items are incorrect")
+currentTest = "[KEEPKNEW-4A] KeepKeysToNew must keep matching wildcards with case-sensitive matching"
+    Set dc1 = New DictCollection: Set dc2 = New DictCollection
+    dc1.Add("x", 1).Add("_X_", 2).Add("_x", 3).Add "X_", 4
+    ' keep everything that contains "X"
+    Set dc2 = dc1.KeepKeysToNew(Array("*X*"), True, vbBinaryCompare)
+    If dc2.Count <> 2 Or dc2.KeyOfItemAt(0) <> "_X_" Or dc2.KeyOfItemAt(1) <> "X_" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect keys")
+    ' keep everything that starts with "X"
+    Set dc2 = dc1.KeepKeysToNew(Array("X*"), True, vbBinaryCompare)
+    If dc2.Count <> 1 Or dc2.KeyOfItemAt(0) <> "X_" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect keys")
+    ' keep everything that ends with "x"
+    Set dc2 = dc1.KeepKeysToNew(Array("*x"), True, vbBinaryCompare)
+    If dc2.Count <> 2 Or dc2.KeyOfItemAt(0) <> "x" Or dc2.KeyOfItemAt(1) <> "_x" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect keys")
+currentTest = "[KEEPKNEW-4B] KeepKeysToNew must keep matching wildcards with case-insensitive matching"
+    Set dc1 = New DictCollection: Set dc2 = New DictCollection
+    dc1.Add("x", 1).Add("_X_", 2).Add("_X", 3).Add "X_", 4
+    ' keep everything that contains "X" or "x"
+    Set dc2 = dc1.KeepKeysToNew(Array("*X*"), True, vbTextCompare)
+    If dc2.Count <> 4 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect keys")
+    ' keep everything that starts with "X" or "x"
+    Set dc2 = dc1.KeepKeysToNew(Array("x*"), True, vbTextCompare)
+    If dc2.Count <> 2 Or dc2.KeyOfItemAt(0) <> "x" Or dc2.KeyOfItemAt(1) <> "X_" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect keys")
+    ' keep everything that ends with "X" or "x" or matches "_*_"
+    Set dc2 = dc1.KeepKeysToNew(Array("*x", "_*_"), True, vbTextCompare)
+    If dc2.Count <> 3 Or dc2.KeyOfItemAt(0) <> "x" Or dc2.KeyOfItemAt(1) <> "_X_" Or dc2.KeyOfItemAt(2) <> "_X" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect keys")
+currentTest = "[KEEPKNEW-5] KeepKeysToNew must clone non-matching SubCollections"
+    Set dc1 = New DictCollection: Set dc2 = New DictCollection
+    dc1.AddDC("x").Add "a", 1
+    dc1.AddDC("y").Add "b", 2
+    Set dc2 = dc1.KeepKeysToNew(Array("y")) ' keep SubCollection 'y'
+    dc1.AsDC("y").RemoveAll ' empty source SubCollection, must not affect cloned SubCollection
+    If dc2.Count <> 1 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect item number")
+    If dc2.AsDC("y").Count <> 1 Or dc2.AsDC("y").KeyOfItemAt(0) <> "b" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect SubCollection")
+currentTest = "[KEEPKNEW-6] KeepKeysToNew must trow correct error if KeyArr is of invalid type"
+    Set dc1 = New DictCollection: Set dc2 = New DictCollection
+    dc1.ThrowErrors = True
+    testdata = Array(CInt(1), CDbl(1#), "text", New DictCollection)
+    On Error Resume Next
+    For i = 0 To UBound(testdata)
+        Err.Clear: Set dc2 = dc1.KeepKeysToNew(testdata(i)): If Err.Number <> 13 Then logError DebugPrint, errors, ("-> " & currentTest & ": KeyArr of Type " & TypeName(testdata(i)) & " must throw Error 13")
+    Next
+    On Error GoTo Fail: Err.Clear
+    
+    For i = 1 To 4
+        Set dc1 = New DictCollection: Set dc2 = New DictCollection
+If i = 1 Then currentTest = "[DROPKNEW-1A] DropKeysToNew must copy settings if nothing to drop and empty source DictCollection"
+If i = 2 Then dc1.Add "x", 1: currentTest = "[DROPKNEW-1B] DropKeysToNew must copy settings if nothing to drop and filled source DictCollection"
+If i = 3 Then Keys = Array("x"): currentTest = "[DROPKNEW-1C] DropKeysToNew must copy settings if empty source DictCollection"
+If i = 4 Then dc1.Add "x", 1: Keys = Array("x"): currentTest = "[DROPKNEW-1D] DropKeysToNew must copy settings if filled source DictCollection"
+        dc1.EmulateCollection = True
+        dc1.DefaultValueEnabled = False
+        dc1.EmptyCollectionValue = "empty"
+        dc1.NonExistingValue = #1/1/2000#
+        dc1.LazySorting = False
+        dc1.ZeroBasedIndex = False
+        dc1.CompareMode = vbTextCompare
+        dc1.ThrowErrors = True
+        ' filter
+        Set dc2 = dc1.DropKeysToNew(Array())
+        ' tests
+        If dc2.EmulateCollection <> True Or dc2.DefaultValueEnabled <> False Or dc2.EmptyCollectionValue <> "empty" Then logError DebugPrint, errors, ("-> " & currentTest)
+        If dc2.NonExistingValue <> #1/1/2000# Or dc2.LazySorting <> False Or dc2.ZeroBasedIndex <> False Then logError DebugPrint, errors, ("-> " & currentTest)
+        If dc2.CompareMode <> vbTextCompare Or dc2.ThrowErrors <> True Then logError DebugPrint, errors, ("-> " & currentTest)
+    Next
+currentTest = "[DROPKNEW-2] DropKeysToNew must clone all items with keys if nothing to drop"
+    Set dc1 = New DictCollection: Set dc2 = New DictCollection
+    dc1.Add("a", 1).Add("b", 2).Add(, 2.5).Add "c", 3
+    ' filter
+    Set dc2 = dc1.DropKeysToNew(Array())
+    ' tests
+    If dc2.Count <> 3 Or dc2.KeyCount <> 3 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection .Count=" & dc2.Count & " must be " & 3 & " and .KeyCount=" & dc2.KeyCount & " must be 3")
+    If dc2.KeyAtKeyIndex(0) <> "a" Or dc2.KeyAtKeyIndex(1) <> "b" Or dc2.KeyAtKeyIndex(2) <> "c" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection keys are incorrect")
+    If dc2.ItemAt(0) <> 1 Or dc2.ItemAt(1) <> 2 Or dc2.ItemAt(2) <> 3 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection items are incorrect")
+currentTest = "[DROPKNEW-3A] DropKeysToNew must drop exact matches with case-sensitive matching"
+    Set dc1 = New DictCollection: Set dc2 = New DictCollection
+    dc1.Add("a", 1).Add("b", 2).Add(, 2.5).Add "c", 3
+    Set dc2 = dc1.DropKeysToNew(Array("B"), , vbBinaryCompare)
+    If dc2.Count <> 3 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection .Count=" & dc2.Count & " must be " & 3)
+    If dc2.KeyAtKeyIndex(0) <> "a" Or dc2.KeyAtKeyIndex(1) <> "b" Or dc2.KeyAtKeyIndex(2) <> "c" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection keys are incorrect")
+    If dc2.ItemAt(0) <> 1 Or dc2.ItemAt(1) <> 2 Or dc2.ItemAt(2) <> 3 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection items are incorrect")
+currentTest = "[DROPKNEW-3B] DropKeysToNew must drop exact matches with case-insensitive matching"
+    Set dc1 = New DictCollection: Set dc2 = New DictCollection
+    dc1.Add("a", 1).Add("b", 2).Add(, 2.5).Add "c", 3
+    Set dc2 = dc1.DropKeysToNew(Array("B"), , vbTextCompare)
+    If dc2.Count <> 2 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection .Count=" & dc2.Count & " must be " & 2)
+    If dc2.KeyAtKeyIndex(0) <> "a" Or dc2.KeyAtKeyIndex(1) <> "c" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection keys are incorrect")
+    If dc2.ItemAt(0) <> 1 Or dc2.ItemAt(1) <> 3 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection items are incorrect")
+currentTest = "[DROPKNEW-4A] DropKeysToNew must drop matching wildcards with case-sensitive matching"
+    Set dc1 = New DictCollection: Set dc2 = New DictCollection
+    dc1.Add("x", 1).Add("_X_", 2).Add("_x", 3).Add "X_", 4
+    ' drop everything that contains "X"
+    Set dc2 = dc1.DropKeysToNew(Array("*X*"), True, vbBinaryCompare)
+    If dc2.Count <> 2 Or dc2.KeyOfItemAt(0) <> "x" Or dc2.KeyOfItemAt(1) <> "_x" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect keys")
+    ' drop everything that starts with "X"
+    Set dc2 = dc1.DropKeysToNew(Array("X*"), True, vbBinaryCompare)
+    If dc2.Count <> 3 Or dc2.KeyOfItemAt(0) <> "x" Or dc2.KeyOfItemAt(1) <> "_X_" Or dc2.KeyOfItemAt(2) <> "_x" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect keys")
+    ' drop everything that ends with "x"
+    Set dc2 = dc1.DropKeysToNew(Array("*x"), True, vbBinaryCompare)
+    If dc2.Count <> 2 Or dc2.KeyOfItemAt(0) <> "_X_" Or dc2.KeyOfItemAt(1) <> "X_" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect keys")
+currentTest = "[DROPKNEW-4B] DropKeysToNew must drop matching wildcards with case-insensitive matching"
+    Set dc1 = New DictCollection: Set dc2 = New DictCollection
+    dc1.Add("x", 1).Add("_X_", 2).Add("_X", 3).Add "X_", 4
+    ' drop everything that contains "X" or "x"
+    Set dc2 = dc1.DropKeysToNew(Array("*X*"), True, vbTextCompare)
+    If dc2.Count <> 0 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection must be empty")
+    ' drop everything that starts with "X" or "x"
+    Set dc2 = dc1.DropKeysToNew(Array("x*"), True, vbTextCompare)
+    If dc2.Count <> 2 Or dc2.KeyOfItemAt(0) <> "_X_" Or dc2.KeyOfItemAt(1) <> "_X" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect keys")
+    ' drop everything that ends with "X" or "x" or matches "_*_"
+    Set dc2 = dc1.DropKeysToNew(Array("*x", "_*_"), True, vbTextCompare)
+    If dc2.Count <> 1 Or dc2.KeyOfItemAt(0) <> "X_" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect keys")
+currentTest = "[DROPKNEW-5] DropKeysToNew must clone non-matching SubCollections"
+    Set dc1 = New DictCollection: Set dc2 = New DictCollection
+    dc1.AddDC("x").Add "a", 1
+    dc1.AddDC("y").Add "b", 2
+    Set dc2 = dc1.DropKeysToNew(Array("x")) ' drop SubCollection 'x'
+    dc1.AsDC("y").RemoveAll ' empty source SubCollection, must not affect cloned SubCollection
+    If dc2.Count <> 1 Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect item number")
+    If dc2.AsDC("y").Count <> 1 Or dc2.AsDC("y").KeyOfItemAt(0) <> "b" Then logError DebugPrint, errors, ("-> " & currentTest & ": new DictCollection has incorrect SubCollection")
+currentTest = "[DROPKNEW-6] DropKeysToNew must trow correct error if KeyArr is of invalid type"
+    Set dc1 = New DictCollection: Set dc2 = New DictCollection
+    dc1.ThrowErrors = True
+    testdata = Array(CInt(1), CDbl(1#), "text", New DictCollection)
+    On Error Resume Next
+    For i = 0 To UBound(testdata)
+        Err.Clear: Set dc2 = dc1.DropKeysToNew(testdata(i)): If Err.Number <> 13 Then logError DebugPrint, errors, ("-> " & currentTest & ": KeyArr of Type " & TypeName(testdata(i)) & " must throw Error 13")
+    Next
+    On Error GoTo Fail: Err.Clear
+    
+    GoTo ExitFunction
+Fail:
+    logError DebugPrint, errors, ("-> " & currentTest & " -> Error " & Err.Number & " " & Err.Description)
+ExitFunction:
+    testAdvancedFunctionality2 = errors
+End Function
+
+
 ' tests utilities (DebugPrint=True -> print errors immediately)
-Private Function testUtilFunctionality(Optional DebugPrint As Boolean = False) As Variant
+Private Function testUtilFunctions(Optional DebugPrint As Boolean = False) As Variant
     On Error GoTo Fail: Err.Clear
     Dim errors As Variant, currentTest As String, i As Long, j As Long, testdata As Variant, Val As Variant
     errors = Array()
@@ -6339,7 +6536,7 @@ currentTest = "[USMW-10] UtilStringMatchesWildcard must match when searchtext ma
 Fail:
     logError DebugPrint, errors, ("-> " & currentTest & " -> Error " & Err.Number & " " & Err.Description)
 ExitFunction:
-    testUtilFunctionality = errors
+    testUtilFunctions = errors
 End Function
 
 

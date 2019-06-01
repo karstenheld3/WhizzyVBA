@@ -100,15 +100,21 @@ A step-by-step introduction into the basic functionality of DictCollection. See 
 
 ### Other Collection Functions
 
+***** = function is chainable, meaning it always returns the DictCollection which it is a members of.
+
+Example: `dc.Add("a",1).Add("b",2)` will add 2 key-value-pairs to `dc` in one line.
+
 | What                                                         | How                                                          |
 | ------------------------------------------------------------ | ------------------------------------------------------------ |
-| Collection-compatible Add function                           | `dc.Add2(Item, [Key], [Before], [After]) As DictCollection`  |
-| Add key-value pairs from 2-dimensional or nested array (doesn't add empty keys) | `dc.AddPairs(Arr, [KeyIsFirstColumn]) As DictCollection`     |
+| Collection-compatible Add function                           | ***** `dc.Add2(Item, [Key], [Before], [After]) As DictCollection` |
+| Add key-value pairs from 2-dimensional or nested array (doesn't add empty keys) | ***** `dc.AddPairs(Arr, [KeyIsFirstColumn]) As DictCollection` |
 |                                                              | Example: `dc.AddPairs Array(Array("a",1), Array("b",2))`     |
-| Copy all items and keys                                      | `dc.CopyItems([SourceCollection], [TargetCollection],   [TargetIndex]) As DictCollection` |
+| Copy all items and keys to target DictCollection             | ***** `dc.CopyItems(TargetCollection,   [TargetIndex]) As DictCollection` |
 | Copy settings from on DC to another DC                       | `dc.CopyAllSettingsExceptCollectionType(FromCollection,   ToCollection)` |
 | Copy subcollection chaining settings                         | `dc.CopySubCollectionChainingSettings(FromCollection,   ToCollection)` |
-| Clone entire DictCollection tree                             | `dc.Clone([TargetCollection]) as DictCollection`             |
+| Clone entire DictCollection tree to new DictCollection       | `dc.CloneToNew() as DictCollection`                          |
+| Clone entire DictCollection tree to another DictCollection. Will also copy all DictCollection settings. | ***** `dc.CloneTo(TargetCollection) as DictCollection`       |
+| Clone entire DictCollection tree to another DictCollection while trying to keep the content and settings of the target. | ***** `dc.CloneToPreserve(TargetCollection) as DictCollection` |
 | Create new DictCollection by dropping items with keys specified in the `KeyArr` array. Can handle asterisk wildcards like `"*searchText*"` when used with `AllowWildcards=True`. | `dc.DropKeysToNew(KeyArr, [AllowWildcards], [CompareMode]) As DictCollection` |
 |                                                              | Example: `dc.AddPairs(Array(Array("a",1), Array("b",2), Array("bx",3))).DropKeysToNew(Array("*b*"), True) `  will drop any item with a key containing the character `"b"` (default is case-sensitive comparison) and create a new DictCollection that contains only the first key-value-pair ["a",1]. |
 |                                                              | Example: `dc.AddPairs(Array(Array("a",1), Array("b",2), Array("Bx",3))).DropKeysToNew(Array("a"), False, vbBinaryCompare) ` will drop the item with the key `"a"` and create a new DictCollection that contains only the last two key-value-pairs ["b",2] and ["Bx",3]. |
@@ -140,8 +146,10 @@ A step-by-step introduction into the basic functionality of DictCollection. See 
 |                                                              | `"SubItems"` - the number of items in the subtree without counting items below circular references |
 |                                                              | `"CircularReferences"` - the number of DictCollections in the subtree that contain DictCollections of upper levels of the same tree |
 | Assign keys to items that have no keys in the format "_POS"  | `dc.EnsureAllItemsHaveKeys()`                                |
-| Convert DC tree to single key-value-store                    | `dc.Flatten([TargetCollection] As DictCollection,   [ReturnAnalysisResults]) As DictCollection` |
-| Build DC tree from single key-value-store                    | `dc.Unflatten([TargetCollection])`                           |
+| Flatten nested DictCollection tree to single key-value-store by concatenating subcollection keys with a dot `"."` | ***** `dc.Flatten() As DictCollection`                       |
+| Flatten nested DictCollection tree to new DictCollection     | `dc.FlattenToNew() As DictCollection`                        |
+| Restore nested DictCollection tree form flattened structure  | ***** `dc.Unflatten() As DictCollection`                     |
+| Restore nested DictCollection tree form flattened structure to new DictCollection | `dc.UnflattenToNew() As DictCollection`                      |
 | Demo basic functionality in Immediate Window                 | `dc.DemoBasicFunctionality()`                                |
 | Run all tests with output to Immediate Window                | `dc.SelfTest([DebugPrint])`                                  |
 | Run compatibility tests and return errors                    | `dc.TestCompatibility([DebugPrint]) as Variant`              |
@@ -269,7 +277,7 @@ DictCollection.vbs is a stripped-down VBScript version of DictCollection.cls. It
 
 1. **VB6/VBA Collection** object. Provided with the programming language this class allows adding items with or without key and retrieving them by key or by index. Keys can only be of datatype `String` and key matching is always case-insensitive. Collection supports iteration over its items with the `for each ... in ...` syntax and is optimized for fast adding and retrieving items by key. It can be created like this: `Set c = New Collection`. This object does not exist in VBScript.
 2. **Scripting.Dictionary** comes with the "Microsoft Scripting Runtime" COM library (scrrun.dll) and is a very fast key-value-store that supports iteration over its items with the `for each ... in ...` syntax. Every item must have a key. Keys can be of any datatype or they can be objects. Number keys are data-type-insensitive which means that the key `1` as `Integer` = `1.0` as `Double` = `31/12/1899` as `Date`. String key matching can be either case-sensitive or case-insensitive. If the library is not referenced in your project (F2 > Right Mouse Click > References), you have to use the `Dim d as Object: Set d = CreateObject("Scripting.Dictionary")` syntax to create a new Dictionary object. Scripting.Dictionary does not exist on Apple Mac environments.
-3. **DictCollection** is implemented in VB6/VBA and supports adding items with or without keys. It has two emulation modes `.EmulateDictionary = true` and `.EmulateCollection = true` that mimic the behavior of Dictionary and Collection. Keys have to be Strings and key matching can be case-sensitive or case-insensitive. Items and keys are stored internally as arrays so retrieving items by index is very fast. DictCollection has extended functionality like `.SortedKeys()`, `.ItemsAndKeys()`, `.Insert()` , `.Move()` and `.CopyItems()` and comes with useful String and Array functions like `.UtilAddArrayValue()`, `.UtilRemoveArrayValue()`, `.UtilRemoveArrayValueByIndex()` and `.UtilSortArray()`.
+3. **DictCollection** is implemented in VB6/VBA and supports adding items with or without keys. It has two emulation modes `.EmulateDictionary = true` and `.EmulateCollection = true` that mimic the behavior of Dictionary and Collection. Iteration using the `for each ... in ...` syntax is not supported (not possible with VB6/VBA classes). Keys have to be Strings and key matching can be case-sensitive or case-insensitive. Items and keys are stored internally as arrays so retrieving items by index is very fast. DictCollection has extended functionality like `.ToArray()`,  `.SortedKeys()`, `.ItemsAndKeys()`, `.Insert()` , `.Move()`, `.CopyItems()`, `.Clone()`, `.Flatten()` and `.Unflatten()` and comes with useful String and Array functions like `.UtilAddArrayValue()`, `.UtilRemoveArrayValue()`, `.UtilRemoveArrayValueByIndex()` and `.UtilSortArray()`. Keys can also be searched using wildcards  like `"*part1*part2"`.
 
 ## Performance
 
