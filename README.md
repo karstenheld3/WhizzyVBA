@@ -137,6 +137,8 @@ Example: `dc.Add("a",1).Add("b",2)` will add 2 key-value-pairs to `dc` in one li
 | Get items and keys as Array(i,k) sorted by keys              | `dc.ItemsAndKeysSortedByKeys([IncludeEmptyItems],   [IncludeItemsWithoutKeys]) As Variant` |
 | Get items as Array sorted by keys                            | `dc.ItemsSortedByKeys([IncludeEmptyItems], [IncludeItemsWithoutKeys]) As Variant` |
 | Get keys and items as Array(k,i) sorted by keys              | d`c.SortedKeysAndItems([IncludeEmptyKeys], [IncludeEmptyItems]) As Variant` |
+| Returns two-dimensional Array(r,c) containing all items that are DictCollections (= subcollections) as rows and their items as columns. The first row is a list of all keys (columns) found in subcollections, the first column is a list of the keys of the subcollections. | `dc.ToTable(FillValue, [FlattenSubCollections]) As Variant`  |
+| Returns two-dimensional Array(r,c) containing all items that are DictCollections (= subcollections) as rows and their items as columns. ColHeaderKeys define the keys of the subcollections that should be returned and their order. | `dc.ToColumns(ColHeaderKeys, [FlattenSubCollections]) As Variant` |
 | Find key index where insert leaves keys sorted               | `dc.FindKeyInsertIndex(SearchedKey As Variant, [CompareMode]) As Long` |
 | Find all keys that start with text and return as Array       | `dc.FindKeysThatStartWith(SearchText, [CompareMode]) As Variant` |
 | Get infos about DictCollection tree content                  | `dc.AnalyzeDictCollectionTree([Recursive]) As DictCollection` with the following keys: |
@@ -164,13 +166,16 @@ Example: `dc.Add("a",1).Add("b",2)` will add 2 key-value-pairs to `dc` in one li
 | Add value to array (creates one)                             | `dc.UtilAddArrayValue(Arr As Variant, Val As Variant)`       |
 | Find index of value in array or return -1                    | `dc.UtilFindArrayIndex(Arr, Val) As Long`                    |
 | Remove a value from an array by index                        | `dc.UtilRemoveArrayValueByIndex(arr, Index)`                 |
-| Get array dimensions (0 = uninitialized)                     | `dc.UtilArrayDimensions(Arr) As Integer`                     |
+| Get array dimensions (0 = uninitialized, -1 = nested one-dimensional array, 1 = one-dimensional array, 2 = two-dimensional array, ...) | `dc.UtilArrayDimensions(Arr) As Integer`                     |
 | Remove a value from an array                                 | `dc.UtilRemoveArrayValue(Arr, Val)`                          |
+| Converts (flattens) any input array to a one-dimensional Array(i) by keeping all values. | `dc.UtilArrayConvertTo1Dim(Arr) As Variant`                  |
+| Converts any input array to a two-dimensional Array(r,c) of given size by keeping all values. A one-dimensional input array becomes the first column. All other values will be filled by `FillValue`. Nested one-dimensional arrays will be transformed into rows (nested arrays) and columns (nested values). Does not handle input array with more that 2 dimensions. | `dc.UtilArrayConvertTo2Dim(Arr, RowCount, ColumnCount, FillValue) As Variant` |
 | Sort one/two-dimensional/nested array                        | `dc.UtilSortArray(Arr, FromIndex, ToIndex)`                  |
 | Sort one/two-dimensional/nested array using `StrComp()`      | `dc.UtilSortStringArray(Arr, FromIndex, ToIndex,   CompareMode)` |
 | Check if text has only number chars                          | `dc.UtilStringConsistsOfNumericAsciiChars(Text) As   Boolean` |
 | Build concatenated string by repeating a text                | `dc.UtilStringRepeat(Text, NumberOfTimes) As String`         |
 | Check if text starts with another text                       | `dc.UtilStringStartsWith(Text, SearchText, [CompareMode]) As Boolean` |
+| Find first occurrence of chars within text or returns -1     | `dc.UtilStringFindChars(InputString, StartPos, Chars As String) As Long` |
 | Check if text matches asterisk-splitted wildcards like `"*.*"` or `*findText*`. | `dc.UtilStringMatchesWildcard(TextToCheck, WildcardSplit, [CompareMode]) As Boolean` |
 
 ### Demos and Use Cases (Todo)
