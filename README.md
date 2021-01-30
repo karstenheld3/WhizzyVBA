@@ -82,8 +82,8 @@ A step-by-step introduction into the basic functionality of DictCollection. See 
 
 | Setting                                           | Explanation                                                  |
 | ------------------------------------------------- | ------------------------------------------------------------ |
-| `dc.ThowErrors = False` (default)                 | will return `.NonExistingValue` or `Empty` when accessing nonexistent indexes or keys |
-| `dc.ThowErrors = True`                            | will throw errors when accessing nonexistent indexes or keys |
+| `dc.ThrowErrors = False` (default)                | will return `.NonExistingValue` or `Empty` when accessing nonexistent indexes or keys |
+| `dc.ThrowErrors = True`                           | will throw errors when accessing nonexistent indexes or keys |
 | `dc.LazySorting = True` (default)                 | will sort key array at first read access and thus speed up `.Add()` |
 | `dc.LazySorting = False`                          | will sort key array at every `.Add()` if key is used         |
 | `dc.CompareMode = 0` (default)                    | keys are case-sensitive, will binary compare keys, fastest   compare method |
@@ -107,8 +107,10 @@ Example: `dc.Add("a",1).Add("b",2)` will add 2 key-value-pairs to `dc` in one li
 | What                                                         | How                                                          |
 | ------------------------------------------------------------ | ------------------------------------------------------------ |
 | Collection-compatible Add function                           | ***** `dc.Add2(Item, [Key], [Before], [After]) As DictCollection` |
-| Add key-value pairs from 2-dimensional or nested array (doesn't add empty keys) | ***** `dc.AddPairs(Arr, [KeyIsFirstColumn]) As DictCollection` |
-|                                                              | Example: `dc.AddPairs Array(Array("a",1), Array("b",2))`     |
+| Add key-value pairs from 2-dimensional or nested array, doesn't add empty keys | ***** `dc.AddPairs(Arr, [KeyIsFirstColumn]) As DictCollection` |
+|                                                              | Examples: `dc.AddPairs Array(Array("a",1), Array("b",2))` or `dc.AddPairs Array("a",1,"b",2")` |
+| Add keys from 1 or 2-dimensional array with the specified value (default=Empty), value can be same-sized array, doesn't add empty keys | ***** `dc.AddKeys(Arr, [ValueOrArray]) As DictCollection`    |
+|                                                              | Examples: `dc.AddKeys Array("a", "b","c","?")` or `dc.AddKeys Array("a","b","c"), -1` or `dc.AddKeys Array("a","b","c"), Array(1,2,3)` or `dc.AddKeys Split("k1 k2 k3"," "), Split("v1,v2,v3",",")` |
 | Copy all items and keys to target DictCollection             | ***** `dc.CopyItems(TargetCollection,   [TargetIndex]) As DictCollection` |
 | Copy settings from on DC to another DC                       | `dc.CopyAllSettingsExceptCollectionType(FromCollection,   ToCollection)` |
 | Copy subcollection chaining settings                         | `dc.CopySubCollectionChainingSettings(FromCollection,   ToCollection)` |
@@ -136,7 +138,7 @@ Example: `dc.Add("a",1).Add("b",2)` will add 2 key-value-pairs to `dc` in one li
 | Get items and keys as Array(i,k)                             | `dc.ItemsAndKeys([IncludeEmptyItems], [IncludeItemsWithoutKeys]) As Variant` |
 | Get items and keys as Array(i,k) sorted by keys              | `dc.ItemsAndKeysSortedByKeys([IncludeEmptyItems],   [IncludeItemsWithoutKeys]) As Variant` |
 | Get items as Array sorted by keys                            | `dc.ItemsSortedByKeys([IncludeEmptyItems], [IncludeItemsWithoutKeys]) As Variant` |
-| Get keys and items as Array(k,i) sorted by keys              | d`c.SortedKeysAndItems([IncludeEmptyKeys], [IncludeEmptyItems]) As Variant` |
+| Get keys and items as Array(k,i) sorted by keys              | `dc.SortedKeysAndItems([IncludeEmptyKeys], [IncludeEmptyItems]) As Variant` |
 | Returns two-dimensional Array(r,c) containing all items that are DictCollections (= subcollections) as rows and their items as columns. The first row is a list of all keys (columns) found in subcollections, the first column is a list of the keys of the subcollections. | `dc.ToTable(FillValue, [FlattenSubCollections]) As Variant`  |
 | Returns two-dimensional Array(r,c) containing all items that are DictCollections (= subcollections) as rows and their items as columns. ColHeaderKeys define the keys of the subcollections that should be returned and their order. | `dc.ToColumns(ColHeaderKeys, [FlattenSubCollections]) As Variant` |
 | Find key index where insert leaves keys sorted               | `dc.FindKeyInsertIndex(SearchedKey As Variant, [CompareMode]) As Long` |
@@ -237,23 +239,23 @@ DictCollection.vbs is a stripped-down VBScript version of DictCollection.cls. It
 
 ### Settings
 
-| Setting                                             | Explanation                                                  |
-| --------------------------------------------------- | ------------------------------------------------------------ |
-| `dc.ThowErrors = False` (default)                   | will return `.NonExistingValue` or `Empty` when accessing nonexistent indexes or keys |
-| `dc.ThowErrors = True`                              | will throw errors when accessing nonexistent indexes or keys |
-| `dc.LazySorting = True` (default)                   | will sort key array at first access using a key and thus speed up `.Add` |
-| `dc.LazySorting = False`                            | will sort key array at every `.Add` if key is used           |
-| `dc.CompareMode = 0` (default)                      | keys are case-sensitive, will binary compare keys, fastest   compare method |
-| `dc.CompareMode = 1`                                | keys are case-insensitive, Ä = ä = A = a = á = Á             |
-| `dc.CompareMode = 2`                                | keys are case-insensitive (only MSAccess), uses localeID for matching |
-| `dc.EmulateDictionary = True`                       | DictCollection will behave like Scripting.Dictionary (no indexes, just keys) |
-| `dc.EmulateCollection = True`                       | DictCollection will behave like VB Collection (`Collection.Add` implemented as `DictCollection.Add2`) |
-| `dc.ZeroBasedIndex = True` (default)                | first item can be accessed with index = 0 (when ZeroBasedIndex=False, first index = 1) |
-| `dc.DefaultValueEnabled = True` (default)           | calling default property without argument returns either the   first item, "[EMPTY]", or "[NONEXISTING]", allows endless subcollection chaining: `Set dc2 = dc1("a")("nonexisting")("b")`   (ThrowErrors=False) |
-| `dc.DefaultValueEnabled = False`                    | calling default property without argument as dc or dc()   returns a reference to the DictCollection, allows it to be used like a regular object: 'VarType(dc)' and   'dc Is DictCollection' will work |
-| `dc.NonExistingValue = "[NONEXISTING]"` (default)   | the value to be returned for nonexisting items if ThrowError=False; can be used to overwrite this value with anything except objects, e.g. `Empty, "", 0, False` |
-| `dc.EmptyCollectionValue = "[EMPTY]"` (default)     | the default value of empty DictCollections (ThrowError=False,   DefaultValueEnabled=True); can be used to overwrite this value with anything except objects, e.g. Empty, "", 0, False |
-| `dc.CollectionType` sets/gets the collection type:  | 0 = NonExisting, 1 = Empty Array, 2 = Filled Array, 3 = Empty Key-Value-Store, 4 = Filled Key-Value-Store, 5 = Key-Value-Store with at least one item having no key |
+| Setting                                            | Explanation                                                  |
+| -------------------------------------------------- | ------------------------------------------------------------ |
+| `dc.ThrowErrors = False` (default)                 | will return `.NonExistingValue` or `Empty` when accessing nonexistent indexes or keys |
+| `dc.ThrowErrors = True`                            | will throw errors when accessing nonexistent indexes or keys |
+| `dc.LazySorting = True` (default)                  | will sort key array at first access using a key and thus speed up `.Add` |
+| `dc.LazySorting = False`                           | will sort key array at every `.Add` if key is used           |
+| `dc.CompareMode = 0` (default)                     | keys are case-sensitive, will binary compare keys, fastest   compare method |
+| `dc.CompareMode = 1`                               | keys are case-insensitive, Ä = ä = A = a = á = Á             |
+| `dc.CompareMode = 2`                               | keys are case-insensitive (only MSAccess), uses localeID for matching |
+| `dc.EmulateDictionary = True`                      | DictCollection will behave like Scripting.Dictionary (no indexes, just keys) |
+| `dc.EmulateCollection = True`                      | DictCollection will behave like VB Collection (`Collection.Add` implemented as `DictCollection.Add2`) |
+| `dc.ZeroBasedIndex = True` (default)               | first item can be accessed with index = 0 (when ZeroBasedIndex=False, first index = 1) |
+| `dc.DefaultValueEnabled = True` (default)          | calling default property without argument returns either the   first item, "[EMPTY]", or "[NONEXISTING]", allows endless subcollection chaining: `Set dc2 = dc1("a")("nonexisting")("b")`   (ThrowErrors=False) |
+| `dc.DefaultValueEnabled = False`                   | calling default property without argument as dc or dc()   returns a reference to the DictCollection, allows it to be used like a regular object: 'VarType(dc)' and   'dc Is DictCollection' will work |
+| `dc.NonExistingValue = "[NONEXISTING]"` (default)  | the value to be returned for nonexisting items if ThrowError=False; can be used to overwrite this value with anything except objects, e.g. `Empty, "", 0, False` |
+| `dc.EmptyCollectionValue = "[EMPTY]"` (default)    | the default value of empty DictCollections (ThrowError=False,   DefaultValueEnabled=True); can be used to overwrite this value with anything except objects, e.g. Empty, "", 0, False |
+| `dc.CollectionType` sets/gets the collection type: | 0 = NonExisting, 1 = Empty Array, 2 = Filled Array, 3 = Empty Key-Value-Store, 4 = Filled Key-Value-Store, 5 = Key-Value-Store with at least one item having no key |
 
 ### Other Collection Functions
 
@@ -282,7 +284,7 @@ DictCollection.vbs is a stripped-down VBScript version of DictCollection.cls. It
 
 1. **VB6/VBA Collection** object. Provided with the programming language this class allows adding items with or without key and retrieving them by key or by index. Keys can only be of datatype `String` and key matching is always case-insensitive. Collection supports iteration over its items with the `for each ... in ...` syntax and is optimized for fast adding and retrieving items by key. It can be created like this: `Set c = New Collection`. This object does not exist in VBScript.
 2. **Scripting.Dictionary** comes with the "Microsoft Scripting Runtime" COM library (scrrun.dll) and is a very fast key-value-store that supports iteration over its items with the `for each ... in ...` syntax. Every item must have a key. Keys can be of any datatype or they can be objects. Number keys are data-type-insensitive which means that the key `1` as `Integer` = `1.0` as `Double` = `31/12/1899` as `Date`. String key matching can be either case-sensitive or case-insensitive. If the library is not referenced in your project (F2 > Right Mouse Click > References), you have to use the `Dim d as Object: Set d = CreateObject("Scripting.Dictionary")` syntax to create a new Dictionary object. Scripting.Dictionary does not exist on Apple Mac environments.
-3. **DictCollection** is implemented in VB6/VBA and supports adding items with or without keys. It has two emulation modes `.EmulateDictionary = true` and `.EmulateCollection = true` that mimic the behavior of Dictionary and Collection. Iteration using the `for each ... in ...` syntax is not supported (not possible with VB6/VBA classes). Keys have to be Strings and key matching can be case-sensitive or case-insensitive. Items and keys are stored internally as arrays so retrieving items by index is very fast. DictCollection has extended functionality like `.ToArray()`,  `.SortedKeys()`, `.ItemsAndKeys()`, `.Insert()` , `.Move()`, `.CopyItems()`, `.Clone()`, `.Flatten()` and `.Unflatten()` and comes with useful String and Array functions like `.UtilAddArrayValue()`, `.UtilRemoveArrayValue()`, `.UtilRemoveArrayValueByIndex()` and `.UtilSortArray()`. Keys can also be searched using wildcards  like `"*part1*part2"`.
+3. **DictCollection** is implemented in VB6/VBA and supports adding items with or without keys. It has two emulation modes `.EmulateDictionary = true` and `.EmulateCollection = true` that mimic the behavior of Dictionary and Collection. Iteration using the `for each ... in ...` syntax is not supported (not possible with VB6/VBA classes). Keys have to be Strings and key matching can be case-sensitive or case-insensitive. Items and keys are stored internally as arrays so retrieving items by index is very fast. DictCollection has extended functionality like `.ToArray()`, `.ToTable()`, `.ToColumns()`,  `.SortedKeys()`, `.ItemsAndKeys()`, `.Insert()` , `.Move()`, `.CopyItems()`, `.Clone()`, `.Flatten()` and `.Unflatten()`, and comes with useful String and Array functions like `.UtilAddArrayValue()`, `.UtilRemoveArrayValue()`, `.UtilRemoveArrayValueByIndex()` and `.UtilSortArray()`. Keys can also be searched and filtered using wildcards  like `"*part1*part2"` using the `.DopKeysToNew()`, `.KeepKeysToNew()` functions.
 
 ## Performance
 
